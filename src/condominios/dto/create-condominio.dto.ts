@@ -57,7 +57,7 @@ export class CreateCondominioDto {
 
   @ApiPropertyOptional({
     description: 'NIT / Identificación Tributaria',
-    example: '900123456-7',
+    example: '123456789',
   })
   @IsString()
   @IsOptional()
@@ -98,8 +98,8 @@ export class CreateCondominioDto {
 
   // Configuración de Acceso y Dominio
   @ApiPropertyOptional({
-    description: 'Subdominio usado por el frontend (ej: las-flores). Solo letras minúsculas, números y guiones',
-    example: 'las-flores',
+    description: 'Subdominio usado por el frontend (ej: condominio-las-flores). Solo letras minúsculas, números y guiones',
+    example: 'condominio-las-flores',
     pattern: '^[a-z0-9-]+$',
   })
   @IsString()
@@ -109,7 +109,7 @@ export class CreateCondominioDto {
     message:
       'El subdominio del frontend solo puede contener letras minúsculas, números y guiones',
   })
-  frontSubdomain?: string; // Subdominio usado por el frontend (ej: las-flores)
+  frontSubdomain?: string; // Subdominio usado por el frontend (ej: condominio-las-flores)
 
   @ApiPropertyOptional({
     description: 'Subdominio único para acceso (opcional, se genera automáticamente desde frontSubdomain)',
@@ -167,14 +167,14 @@ export class CreateCondominioDto {
 
   @ApiPropertyOptional({
     description: 'Fecha de vencimiento del plan (ISO 8601)',
-    example: '2024-12-31T23:59:59.000Z',
+    example: '2025-12-31T23:59:59Z',
   })
   @IsDateString()
   @IsOptional()
   planExpiresAt?: string; // Fecha de vencimiento del plan
 
   @ApiPropertyOptional({
-    description: 'Módulos activos del condominio',
+    description: 'Módulos activos del condominio (debe enviarse como string JSON en form-data)',
     example: ['reservas', 'documentos', 'pqrs'],
     type: [String],
   })

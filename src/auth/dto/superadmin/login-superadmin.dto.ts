@@ -4,7 +4,7 @@ import { ApiProperty } from "@nestjs/swagger";
 export class LoginSuperadminDto {
   @ApiProperty({
     description: "Correo electrónico del superadministrador",
-    example: "admin@vekino.com",
+    example: "nspes2020@gmail.com",
   })
   @IsEmail()
   @IsNotEmpty()
@@ -12,7 +12,7 @@ export class LoginSuperadminDto {
 
   @ApiProperty({
     description: "Contraseña del superadministrador",
-    example: "password123",
+    example: "Sa722413.",
   })
   @IsString()
   @IsNotEmpty()

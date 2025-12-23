@@ -66,7 +66,26 @@ export class CondominiosController {
   @UseInterceptors(FileInterceptor('logo'))
   @ApiOperation({
     summary: 'Crear un nuevo condominio',
-    description: 'Crea un nuevo condominio con su base de datos dedicada. Requiere rol SUPERADMIN.',
+    description: `Crea un nuevo condominio con su base de datos dedicada. Requiere rol SUPERADMIN.
+
+**Ejemplo de uso con curl (multipart/form-data):**
+\`\`\`bash
+curl --location 'http://localhost:3000/condominios' \\
+--header 'Authorization: Bearer TU_TOKEN_AQUI' \\
+--form 'name="Condominio Las Flores"' \\
+--form 'nit="123456789"' \\
+--form 'address="Calle 123 #45-67"' \\
+--form 'city="Bogotá"' \\
+--form 'country="Colombia"' \\
+--form 'timezone="AMERICA_BOGOTA"' \\
+--form 'frontSubdomain="condominio-las-flores"' \\
+--form 'primaryColor="#3B82F6"' \\
+--form 'subscriptionPlan="BASICO"' \\
+--form 'unitLimit="100"' \\
+--form 'planExpiresAt="2025-12-31T23:59:59Z"' \\
+--form 'activeModules="[\"reservas\",\"documentos\",\"pqrs\"]"' \\
+--form 'logo=@"/ruta/a/imagen.jpg"'
+\`\`\``,
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ type: CreateCondominioDto })
@@ -133,7 +152,13 @@ export class CondominiosController {
   @Get()
   @ApiOperation({
     summary: 'Obtener todos los condominios',
-    description: 'Retorna una lista de todos los condominios registrados en el sistema',
+    description: `Retorna una lista de todos los condominios registrados en el sistema.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://localhost:3000/condominios' \\
+--header 'Content-Type: application/json'
+\`\`\``,
   })
   @ApiResponse({
     status: 200,
@@ -174,7 +199,26 @@ export class CondominiosController {
 
 **Importante**: Este endpoint debe ser llamado desde el subdominio del condominio.
 - Ejemplo: \`http://condominio-las-flores.localhost:3000/condominios/users\`
-- El subdominio se detecta automáticamente del header \`Host\` de la petición.`,
+- El subdominio se detecta automáticamente del header \`Host\` de la petición.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://condominio-las-flores.localhost:3000/condominios/users' \\
+--header 'Content-Type: application/json' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI' \\
+--data-raw '{
+    "name": "Juan Pérez",
+    "email": "juan.perez@email.com",
+    "password": "Password123",
+    "role": "PROPIETARIO",
+    "firstName": "Juan",
+    "lastName": "Pérez",
+    "tipoDocumento": "CC",
+    "numeroDocumento": "1234567890",
+    "telefono": "3001234567",
+    "unidadId": "93e0ef39-855a-454b-b612-02e70d74e924"
+}'
+\`\`\``,
   })
   @ApiBody({ type: CreateCondominioUserDto })
   @ApiBearerAuth('JWT-auth')
@@ -184,18 +228,18 @@ export class CondominiosController {
     description: 'Usuario creado exitosamente',
     type: CondominioUserResponseDto,
     example: {
-      id: '550e8400-e29b-41d4-a716-446655440000',
+      id: '93e0ef39-855a-454b-b612-02e70d74e924',
       name: 'Juan Pérez',
-      email: 'juan.perez@example.com',
-      role: 'ADMIN',
+      email: 'juan.perez@email.com',
+      role: 'PROPIETARIO',
       firstName: 'Juan',
       lastName: 'Pérez',
       tipoDocumento: 'CC',
       numeroDocumento: '1234567890',
-      telefono: '+57 300 123 4567',
-      unidadId: '550e8400-e29b-41d4-a716-446655440001',
-      createdAt: '2024-01-15T10:30:00.000Z',
-      updatedAt: '2024-01-15T10:30:00.000Z',
+      telefono: '3001234567',
+      unidadId: '93e0ef39-855a-454b-b612-02e70d74e924',
+      createdAt: '2024-12-23T10:30:00.000Z',
+      updatedAt: '2024-12-23T10:30:00.000Z',
     },
   })
   @ApiResponse({
@@ -242,7 +286,14 @@ export class CondominiosController {
     description: `Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.
 
 **Importante**: Este endpoint debe ser llamado desde el subdominio del condominio.
-- Ejemplo: \`http://condominio-las-flores.localhost:3000/condominios/users\``,
+- Ejemplo: \`http://condominio-las-flores.localhost:3000/condominios/users\`
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://condominio-las-flores.localhost:3000/condominios/users' \\
+--header 'Content-Type: application/json' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI'
+\`\`\``,
   })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
@@ -252,18 +303,32 @@ export class CondominiosController {
     type: [CondominioUserResponseDto],
     example: [
       {
-        id: '550e8400-e29b-41d4-a716-446655440000',
+        id: '93e0ef39-855a-454b-b612-02e70d74e924',
         name: 'Juan Pérez',
-        email: 'juan.perez@example.com',
-        role: 'ADMIN',
+        email: 'juan.perez@email.com',
+        role: 'PROPIETARIO',
         firstName: 'Juan',
         lastName: 'Pérez',
         tipoDocumento: 'CC',
         numeroDocumento: '1234567890',
-        telefono: '+57 300 123 4567',
-        unidadId: '550e8400-e29b-41d4-a716-446655440001',
-        createdAt: '2024-01-15T10:30:00.000Z',
-        updatedAt: '2024-01-15T10:30:00.000Z',
+        telefono: '3001234567',
+        unidadId: '93e0ef39-855a-454b-b612-02e70d74e924',
+        createdAt: '2024-12-23T10:30:00.000Z',
+        updatedAt: '2024-12-23T10:30:00.000Z',
+      },
+      {
+        id: '4e666f6a-4cf2-4abd-96d1-2562c5eac4f8',
+        name: 'María García',
+        email: 'maria.garcia@email.com',
+        role: 'ADMIN',
+        firstName: 'María',
+        lastName: 'García',
+        tipoDocumento: 'CC',
+        numeroDocumento: '9876543210',
+        telefono: '3009876543',
+        unidadId: null,
+        createdAt: '2024-12-20T08:15:00.000Z',
+        updatedAt: '2024-12-20T08:15:00.000Z',
       },
     ],
   })
@@ -349,7 +414,17 @@ export class CondominiosController {
   @RequireCondominioAccess()
   @ApiOperation({
     summary: 'Actualizar el rol de un usuario',
-    description: 'Actualiza el rol de un usuario específico en el condominio. Requiere rol SUPERADMIN o ADMIN.',
+    description: `Actualiza el rol de un usuario específico en el condominio. Requiere rol SUPERADMIN o ADMIN.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://condominio-las-flores.localhost:3000/condominios/users/{userId}/role' \\
+--header 'Content-Type: application/json' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI' \\
+--data-raw '{
+    "role": "ADMIN"
+}'
+\`\`\``,
   })
   @ApiParam({
     name: 'userId',
@@ -405,7 +480,17 @@ export class CondominiosController {
   @UseInterceptors(FileInterceptor('image'))
   @ApiOperation({
     summary: 'Actualizar un usuario (PUT)',
-    description: 'Actualiza completamente la información de un usuario en el condominio. Requiere rol SUPERADMIN o ADMIN.',
+    description: `Actualiza completamente la información de un usuario en el condominio. Requiere rol SUPERADMIN o ADMIN.
+
+**Ejemplo de uso con curl (multipart/form-data):**
+\`\`\`bash
+curl --location 'http://condominio-las-flores.localhost:3000/condominios/users/{userId}' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI' \\
+--form 'name="Juan Pérez"' \\
+--form 'email="juan.perez@example.com"' \\
+--form 'identificationNumber="1234567890"' \\
+--form 'image=@"/ruta/a/imagen.jpg"'
+\`\`\``,
   })
   @ApiParam({
     name: 'userId',
@@ -463,7 +548,14 @@ export class CondominiosController {
   @UseInterceptors(FileInterceptor('image'))
   @ApiOperation({
     summary: 'Actualizar parcialmente un usuario (PATCH)',
-    description: 'Actualiza parcialmente la información de un usuario en el condominio. Requiere rol SUPERADMIN o ADMIN.',
+    description: `Actualiza parcialmente la información de un usuario en el condominio. Requiere rol SUPERADMIN o ADMIN.
+
+**Ejemplo de uso con curl (multipart/form-data):**
+\`\`\`bash
+curl --location 'http://condominio-las-flores.localhost:3000/condominios/users/{userId}' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI' \\
+--form 'image=@"/ruta/a/nueva-imagen.jpg"'
+\`\`\``,
   })
   @ApiParam({
     name: 'userId',
@@ -520,7 +612,13 @@ export class CondominiosController {
   @RequireCondominioAccess()
   @ApiOperation({
     summary: 'Eliminar un usuario del condominio',
-    description: 'Elimina un usuario del condominio. Requiere rol SUPERADMIN o ADMIN.',
+    description: `Elimina un usuario del condominio. Requiere rol SUPERADMIN o ADMIN.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location --request DELETE 'http://condominio-las-flores.localhost:3000/condominios/users/{userId}' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI'
+\`\`\``,
   })
   @ApiParam({
     name: 'userId',
@@ -774,7 +872,17 @@ export class CondominiosController {
 - Con subdominio: \`http://condominio-las-flores.localhost:3000/condominios/login\` (recomendado)
 - Sin subdominio: \`http://localhost:3000/condominios/login\` (debe incluir \`condominioId\` en el body)
 
-La sesión se establece mediante una cookie que funciona solo en el subdominio específico.`,
+La sesión se establece mediante una cookie que funciona solo en el subdominio específico.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://condominio-las-flores.localhost:3000/condominios/login' \\
+--header 'Content-Type: application/json' \\
+--data-raw '{
+  "email": "nspes2022@gmail.com",
+  "password": "password123"
+}'
+\`\`\``,
   })
   @ApiBody({ type: LoginCondominioUserDto })
   @ApiResponse({
@@ -783,21 +891,21 @@ La sesión se establece mediante una cookie que funciona solo en el subdominio e
     type: LoginResponseDto,
     example: {
       user: {
-        id: '550e8400-e29b-41d4-a716-446655440000',
+        id: '93e0ef39-855a-454b-b612-02e70d74e924',
         name: 'Juan Pérez',
-        email: 'juan.perez@example.com',
-        role: 'ADMIN',
+        email: 'juan.perez@email.com',
+        role: 'PROPIETARIO',
         firstName: 'Juan',
         lastName: 'Pérez',
         tipoDocumento: 'CC',
         numeroDocumento: '1234567890',
-        telefono: '+57 300 123 4567',
-        unidadId: '550e8400-e29b-41d4-a716-446655440001',
-        createdAt: '2024-01-15T10:30:00.000Z',
-        updatedAt: '2024-01-15T10:30:00.000Z',
+        telefono: '3001234567',
+        unidadId: '93e0ef39-855a-454b-b612-02e70d74e924',
+        createdAt: '2024-12-23T10:30:00.000Z',
+        updatedAt: '2024-12-23T10:30:00.000Z',
       },
       session: {
-        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        token: '14fa228c-6584-461b-bf44-2c08fcfb666f.b5363e75-1f55-47e7-aa64-4bfd34fe9a82',
         expiresAt: '2024-12-31T23:59:59.000Z',
       },
     },

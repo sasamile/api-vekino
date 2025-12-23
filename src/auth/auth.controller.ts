@@ -31,7 +31,18 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Registrar un nuevo superadministrador',
-    description: 'Crea una nueva cuenta de superadministrador en el sistema',
+    description: `Crea una nueva cuenta de superadministrador en el sistema.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://localhost:3000/auth/superadmin/register' \\
+--header 'Content-Type: application/json' \\
+--data-raw '{
+    "email": "nspes2020@gmail.com",
+    "password": "Sa722413.",
+    "name": "Santiago Suescun"
+}'
+\`\`\``,
   })
   @ApiBody({ type: RegisterSuperadminDto })
   @ApiResponse({
@@ -76,7 +87,17 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Iniciar sesión como superadministrador',
-    description: 'Autentica un superadministrador y establece una sesión',
+    description: `Autentica un superadministrador y establece una sesión.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://localhost:3000/auth/superadmin/login' \\
+--header 'Content-Type: application/json' \\
+--data-raw '{
+    "email": "nspes2020@gmail.com",
+    "password": "Sa722413."
+}'
+\`\`\``,
   })
   @ApiBody({ type: LoginSuperadminDto })
   @ApiResponse({

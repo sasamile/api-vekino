@@ -25,7 +25,7 @@ export enum EstadoUnidad {
 export class CreateUnidadDto {
   @ApiProperty({
     description: 'Identificador único de la unidad',
-    example: 'Apto 801',
+    example: 'Apto 102',
   })
   @IsString()
   @IsNotEmpty()
@@ -42,7 +42,7 @@ export class CreateUnidadDto {
 
   @ApiPropertyOptional({
     description: 'Área de la unidad en metros cuadrados',
-    example: 75.5,
+    example: 65.5,
     minimum: 0,
   })
   @IsNumber()
@@ -53,7 +53,7 @@ export class CreateUnidadDto {
 
   @ApiPropertyOptional({
     description: 'Coeficiente de copropiedad en porcentaje',
-    example: 15.5,
+    example: 2.5,
     minimum: 0,
     maximum: 100,
   })
@@ -66,7 +66,7 @@ export class CreateUnidadDto {
 
   @ApiPropertyOptional({
     description: 'Valor de la cuota de administración',
-    example: 250000,
+    example: 150000,
     minimum: 0,
   })
   @IsNumber()
@@ -78,7 +78,7 @@ export class CreateUnidadDto {
   @ApiPropertyOptional({
     description: 'Estado actual de la unidad',
     enum: EstadoUnidad,
-    example: EstadoUnidad.OCUPADA,
+    example: EstadoUnidad.VACIA,
   })
   @IsEnum(EstadoUnidad)
   @IsOptional()

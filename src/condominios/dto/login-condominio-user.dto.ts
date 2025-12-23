@@ -12,7 +12,7 @@ export class LoginCondominioUserDto {
 
   @ApiProperty({
     description: 'Correo electrónico del usuario',
-    example: 'juan.perez@example.com',
+    example: 'nspes2022@gmail.com',
   })
   @IsEmail()
   @IsNotEmpty()

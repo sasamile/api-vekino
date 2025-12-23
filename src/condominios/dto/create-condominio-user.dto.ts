@@ -26,7 +26,7 @@ export class CreateCondominioUserDto {
 
   @ApiProperty({
     description: 'Correo electrónico del usuario',
-    example: 'juan.perez@example.com',
+    example: 'juan.perez@email.com',
   })
   @IsEmail()
   @IsNotEmpty()
@@ -34,7 +34,7 @@ export class CreateCondominioUserDto {
 
   @ApiProperty({
     description: 'Contraseña del usuario (mínimo 6 caracteres)',
-    example: 'password123',
+    example: 'Password123',
     minLength: 6,
   })
   @IsString()
@@ -45,7 +45,7 @@ export class CreateCondominioUserDto {
   @ApiProperty({
     description: 'Rol del usuario en el condominio',
     enum: CondominioUserRole,
-    example: CondominioUserRole.ADMIN,
+    example: CondominioUserRole.PROPIETARIO,
   })
   @IsEnum(CondominioUserRole)
   role: CondominioUserRole;
@@ -84,7 +84,7 @@ export class CreateCondominioUserDto {
 
   @ApiPropertyOptional({
     description: 'Número de teléfono',
-    example: '+57 300 123 4567',
+    example: '3001234567',
   })
   @IsString()
   @IsOptional()
@@ -92,7 +92,7 @@ export class CreateCondominioUserDto {
 
   @ApiPropertyOptional({
     description: 'ID de la unidad asociada al usuario',
-    example: 'uuid',
+    example: '93e0ef39-855a-454b-b612-02e70d74e924',
   })
   @IsString()
   @IsOptional()
