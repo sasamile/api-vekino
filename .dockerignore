@@ -1,0 +1,52 @@
+# Dependencias
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+dist
+*.tsbuildinfo
+
+# Archivos de entorno (se pasan como variables)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+test
+*.spec.ts
+*.e2e-spec.ts
+
+# Documentación
+README.md
+docs
+*.md
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Otros
+*.log
+.cache
+.temp
+
