@@ -496,26 +496,71 @@ export class CondominiosUsersService {
       VALUES (${sessionId}, ${expiresAt}, ${sessionToken}, NOW(), NOW(), ${ipAddress}, ${userAgent}, ${user.id})
     `;
 
-    // Retornar el usuario con su rol y el token de sesión
+    // Crear las cookies manualmente con el formato que Better Auth espera
+    const cookieName = 'better-auth.session_token';
+    const baseURL = process.env.BETTER_AUTH_URL || 'http://localhost:3000';
+    
+    // Obtener el dominio del request si está disponible (para subdominios)
+    const host = req?.headers?.host || req?.hostname;
+    let domain: string | null = null;
+    if (host) {
+      // Remover el puerto si existe (ej: condominio.localhost:3000 -> condominio.localhost)
+      const hostWithoutPort = host.split(':')[0];
+      
+      console.log('Host detectado:', host, 'Host sin puerto:', hostWithoutPort);
+      
+      // Para subdominios en desarrollo (ej: condominio.localhost o condominio-las-flores.localhost)
+      // Verificar si tiene más de una parte antes de .localhost
+      if (hostWithoutPort.includes('.localhost')) {
+        // Usar .localhost para que la cookie funcione en todos los subdominios
+        // IMPORTANTE: El punto al inicio es crucial para subdominios
+        domain = '.localhost';
+        console.log('Dominio establecido para subdominio:', domain);
+      } else if (hostWithoutPort !== 'localhost' && hostWithoutPort.includes('.')) {
+        // Para producción, usar el dominio base (ej: .example.com)
+        const parts = hostWithoutPort.split('.');
+        if (parts.length > 2) {
+          domain = '.' + parts.slice(-2).join('.');
+          console.log('Dominio establecido para producción:', domain);
+        }
+      } else {
+        console.log('No se detectó subdominio, no se establecerá Domain. Host:', hostWithoutPort);
+      }
+    } else {
+      console.log('No se pudo obtener el host del request');
+    }
+    
+    // Si no se detectó dominio pero estamos en desarrollo, forzar .localhost
+    // Esto es un fallback por si acaso
+    if (!domain && process.env.NODE_ENV !== 'production') {
+      domain = '.localhost';
+      console.log('Forzando dominio .localhost como fallback');
+    }
+    
+    // No generar headers de cookie aquí - el controlador los manejará con res.cookie()
+    // Esto evita conflictos y garantiza que el dominio se establezca correctamente
     return {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        emailVerified: user.emailVerified,
-        image: user.image,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          emailVerified: user.emailVerified || false,
+          image: user.image || null,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        session: {
+          token: sessionToken,
+          expiresAt: expiresAt,
+        },
+        condominio: {
+          id: condominio.id,
+          name: condominio.name,
+        },
       },
-      session: {
-        token: sessionToken,
-        expiresAt: expiresAt,
-      },
-      condominio: {
-        id: condominio.id,
-        name: condominio.name,
-      },
+      headers: undefined, // No retornar headers - el controlador manejará las cookies
     };
   }
 

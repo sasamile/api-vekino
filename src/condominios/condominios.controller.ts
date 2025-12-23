@@ -10,6 +10,7 @@ import {
   Put,
   Delete,
   Req,
+  Res,
   UseGuards,
   BadRequestException,
   UseInterceptors,
@@ -19,7 +20,7 @@ import {
   FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { CondominiosService } from './condominios.service';
 import { CondominiosUsersService } from './condominios-users.service';
 import { CreateCondominioDto } from './dto/create-condominio.dto';
@@ -65,8 +66,6 @@ export class CondominiosController {
   }
 
   @Get()
-  @UseGuards(RoleGuard)
-  @RequireRole('SUPERADMIN')
   async findAll() {
     return this.condominiosService.findAll();
   }
@@ -144,13 +143,88 @@ export class CondominiosController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @AllowAnonymous()
-  async login(@Body() loginDto: LoginCondominioUserDto, @Req() req: Request) {
+  async login(
+    @Body() loginDto: LoginCondominioUserDto,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
     // Si viene condominioId en el body, usarlo; si no, el servicio lo detectará del subdominio
-    return this.condominiosUsersService.loginUserInCondominio(
+    const result = await this.condominiosUsersService.loginUserInCondominio(
       loginDto.condominioId || null,
       loginDto,
       req,
     );
+    
+    // Establecer la cookie usando res.cookie() de Express
+    // NO establecemos el atributo Domain para que la cookie use automáticamente
+    // el dominio del request (condominio-las-flores.localhost)
+    if (result.data?.session?.token) {
+      const host = req.headers.host || req.hostname;
+      const hostWithoutPort = host?.split(':')[0] || '';
+      
+      console.log('Estableciendo cookie - Host recibido:', host, 'Host sin puerto:', hostWithoutPort);
+      
+      // Para subdominios, NO establecer Domain - dejar que el navegador use el dominio del request
+      // Esto hace que la cookie funcione solo en ese subdominio específico
+      // Si queremos que funcione en todos los subdominios, usaríamos Domain=.localhost
+      const cookieOptions: any = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax' as const,
+        expires: new Date(result.data.session.expiresAt),
+        path: '/',
+        // NO establecer domain - el navegador usará automáticamente el dominio del request
+        // Esto hace que la cookie funcione solo en condominio-las-flores.localhost
+      };
+      
+      // Solo para producción con múltiples subdominios, establecer Domain
+      // En desarrollo, no establecer Domain para que funcione en el subdominio específico
+      if (process.env.NODE_ENV === 'production' && hostWithoutPort.includes('.') && !hostWithoutPort.includes('.localhost')) {
+        const parts = hostWithoutPort.split('.');
+        if (parts.length > 2) {
+          cookieOptions.domain = '.' + parts.slice(-2).join('.');
+          console.log('Dominio establecido para producción:', cookieOptions.domain);
+        }
+      }
+      
+      res.cookie('better-auth.session_token', result.data.session.token, cookieOptions);
+      
+      console.log('Cookie establecida - dominio del request:', hostWithoutPort, 'opciones:', JSON.stringify(cookieOptions));
+    }
+    
+    return res.json(result.data || result);
+  }
+
+  /**
+   * Establece las cookies desde los headers Set-Cookie de Better Auth
+   * Usa setHeader directamente para evitar doble codificación
+   */
+  private setCookiesFromHeaders(
+    headers: Headers | undefined,
+    res: Response,
+  ): void {
+    if (!headers) {
+      console.warn('No se recibieron headers para establecer cookies');
+      return;
+    }
+
+    const setCookieHeaders = headers.get('set-cookie');
+    if (!setCookieHeaders) {
+      console.warn('No se encontró header Set-Cookie en los headers');
+      return;
+    }
+
+    // Establecer los headers Set-Cookie directamente sin modificar
+    // para evitar doble codificación del valor
+    if (Array.isArray(setCookieHeaders)) {
+      setCookieHeaders.forEach((cookie) => {
+        console.log('Estableciendo cookie:', cookie.substring(0, 100) + '...');
+        res.setHeader('Set-Cookie', cookie);
+      });
+    } else {
+      console.log('Estableciendo cookie:', setCookieHeaders.substring(0, 100) + '...');
+      res.setHeader('Set-Cookie', setCookieHeaders);
+    }
   }
 
   // Endpoints para gestionar usuarios dentro de condominios

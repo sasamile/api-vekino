@@ -116,6 +116,23 @@ export class DatabaseManagerService implements OnModuleDestroy {
         }
       }
       
+      // Verificar si la tabla unidad existe, si no, crearla
+      try {
+        await prisma.$queryRaw`SELECT 1 FROM "unidad" LIMIT 1`;
+        console.log('✅ Tabla unidad ya existe');
+      } catch (error: any) {
+        // Si la tabla no existe, crearla
+        if (error.message?.includes('does not exist') || error.code === '42P01') {
+          console.log('📝 Tabla unidad no existe. Creando tabla unidad y tablas relacionadas...');
+          console.log('Error detectado:', error.message, 'Code:', error.code);
+          await this.createMissingTablesWithPrisma(prisma);
+          console.log('✅ Tablas faltantes creadas correctamente');
+        } else {
+          console.error('Error inesperado al verificar tabla unidad:', error);
+          throw error;
+        }
+      }
+      
       console.log('✅ El esquema ya está inicializado en esta base de datos');
       return;
     } catch (error) {
@@ -135,15 +152,26 @@ export class DatabaseManagerService implements OnModuleDestroy {
       });
 
       try {
-        // Crear enum UserRole (si no existe)
-        try {
-          await pool.query(`
-            CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'USER', 'TENANT');
-          `);
-        } catch (error: any) {
-          // Ignorar si el enum ya existe
-          if (!error.message.includes('already exists') && error.code !== '42P16') {
-            throw error;
+        // Crear enums (si no existen)
+        const enums = [
+          { name: 'UserRole', values: ['ADMIN', 'USER', 'TENANT'] },
+          { name: 'TipoUnidad', values: ['APARTAMENTO', 'CASA', 'LOCAL_COMERCIAL'] },
+          { name: 'EstadoUnidad', values: ['OCUPADA', 'VACIA', 'EN_MANTENIMIENTO'] },
+          { name: 'TipoDocumento', values: ['CC', 'CE', 'PASAPORTE', 'NIT', 'OTRO'] },
+          { name: 'RolResidente', values: ['PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'] },
+        ];
+
+        for (const enumDef of enums) {
+          try {
+            const valuesStr = enumDef.values.map(v => `'${v}'`).join(', ');
+            await pool.query(`
+              CREATE TYPE "${enumDef.name}" AS ENUM (${valuesStr});
+            `);
+          } catch (error: any) {
+            // Ignorar si el enum ya existe
+            if (!error.message.includes('already exists') && error.code !== '42P16') {
+              throw error;
+            }
           }
         }
 
@@ -210,6 +238,41 @@ export class DatabaseManagerService implements OnModuleDestroy {
               CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
             );
           `),
+          // Crear tabla Unidad
+          pool.query(`
+            CREATE TABLE IF NOT EXISTS "unidad" (
+              "id" STRING NOT NULL,
+              "identificador" STRING NOT NULL,
+              "tipo" "TipoUnidad" NOT NULL,
+              "area" FLOAT,
+              "coeficienteCopropiedad" FLOAT,
+              "valorCuotaAdministracion" FLOAT,
+              "estado" "EstadoUnidad" NOT NULL DEFAULT 'VACIA',
+              "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              "updatedAt" TIMESTAMP(3) NOT NULL,
+              CONSTRAINT "unidad_pkey" PRIMARY KEY ("id")
+            );
+          `),
+          // Crear tabla Residente
+          pool.query(`
+            CREATE TABLE IF NOT EXISTS "residente" (
+              "id" STRING NOT NULL,
+              "nombre" STRING NOT NULL,
+              "apellidos" STRING NOT NULL,
+              "tipoDocumento" "TipoDocumento" NOT NULL,
+              "numeroDocumento" STRING NOT NULL,
+              "email" STRING NOT NULL,
+              "telefono" STRING,
+              "rol" "RolResidente" NOT NULL,
+              "estado" BOOL NOT NULL DEFAULT true,
+              "permitirAccesoPlataforma" BOOL NOT NULL DEFAULT false,
+              "unidadId" STRING NOT NULL,
+              "userId" STRING,
+              "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              "updatedAt" TIMESTAMP(3) NOT NULL,
+              CONSTRAINT "residente_pkey" PRIMARY KEY ("id")
+            );
+          `),
         ]);
 
         // Crear índices en paralelo
@@ -220,6 +283,13 @@ export class DatabaseManagerService implements OnModuleDestroy {
           pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "session_token_key" ON "session"("token");`),
           pool.query(`CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account"("userId");`),
           pool.query(`CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification"("identifier");`),
+          pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "unidad_identificador_key" ON "unidad"("identificador");`),
+          pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "residente_numeroDocumento_key" ON "residente"("numeroDocumento");`),
+          pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "residente_email_key" ON "residente"("email");`),
+          pool.query(`CREATE INDEX IF NOT EXISTS "residente_unidadId_idx" ON "residente"("unidadId");`),
+          pool.query(`CREATE INDEX IF NOT EXISTS "residente_userId_idx" ON "residente"("userId");`),
+          pool.query(`CREATE INDEX IF NOT EXISTS "residente_estado_idx" ON "residente"("estado");`),
+          pool.query(`CREATE INDEX IF NOT EXISTS "residente_rol_idx" ON "residente"("rol");`),
         ]);
 
         // Crear foreign keys (deben ser secuenciales porque dependen de las tablas)
@@ -227,6 +297,8 @@ export class DatabaseManagerService implements OnModuleDestroy {
           `ALTER TABLE "session" ADD CONSTRAINT IF NOT EXISTS "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`,
           `ALTER TABLE "account" ADD CONSTRAINT IF NOT EXISTS "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`,
           `ALTER TABLE "user" ADD CONSTRAINT IF NOT EXISTS "user_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`,
+          `ALTER TABLE "residente" ADD CONSTRAINT IF NOT EXISTS "residente_unidadId_fkey" FOREIGN KEY ("unidadId") REFERENCES "unidad"("id") ON DELETE RESTRICT ON UPDATE CASCADE;`,
+          `ALTER TABLE "residente" ADD CONSTRAINT IF NOT EXISTS "residente_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;`,
         ];
 
         // Ejecutar foreign keys con manejo de errores (pueden fallar si ya existen)
@@ -249,6 +321,98 @@ export class DatabaseManagerService implements OnModuleDestroy {
         );
       } finally {
         await pool.end();
+      }
+    }
+  }
+
+  /**
+   * Crea las tablas faltantes usando Prisma $executeRaw
+   */
+  private async createMissingTablesWithPrisma(prisma: PrismaClient): Promise<void> {
+    // Crear enums si no existen
+    const enums = [
+      { name: 'TipoUnidad', values: ['APARTAMENTO', 'CASA', 'LOCAL_COMERCIAL'] },
+      { name: 'EstadoUnidad', values: ['OCUPADA', 'VACIA', 'EN_MANTENIMIENTO'] },
+      { name: 'TipoDocumento', values: ['CC', 'CE', 'PASAPORTE', 'NIT', 'OTRO'] },
+      { name: 'RolResidente', values: ['PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'] },
+    ];
+
+    for (const enumDef of enums) {
+      try {
+        const valuesStr = enumDef.values.map(v => `'${v}'`).join(', ');
+        await prisma.$executeRawUnsafe(`
+          CREATE TYPE "${enumDef.name}" AS ENUM (${valuesStr});
+        `);
+      } catch (error: any) {
+        // Ignorar si el enum ya existe
+        if (!error.message?.includes('already exists') && error.code !== '42P16') {
+          // No lanzar error, solo continuar
+        }
+      }
+    }
+
+    // Crear tabla Unidad
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "unidad" (
+        "id" STRING NOT NULL,
+        "identificador" STRING NOT NULL,
+        "tipo" "TipoUnidad" NOT NULL,
+        "area" FLOAT,
+        "coeficienteCopropiedad" FLOAT,
+        "valorCuotaAdministracion" FLOAT,
+        "estado" "EstadoUnidad" NOT NULL DEFAULT 'VACIA',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "unidad_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla Residente
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "residente" (
+        "id" STRING NOT NULL,
+        "nombre" STRING NOT NULL,
+        "apellidos" STRING NOT NULL,
+        "tipoDocumento" "TipoDocumento" NOT NULL,
+        "numeroDocumento" STRING NOT NULL,
+        "email" STRING NOT NULL,
+        "telefono" STRING,
+        "rol" "RolResidente" NOT NULL,
+        "estado" BOOL NOT NULL DEFAULT true,
+        "permitirAccesoPlataforma" BOOL NOT NULL DEFAULT false,
+        "unidadId" STRING NOT NULL,
+        "userId" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "residente_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear índices
+    await Promise.all([
+      prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "unidad_identificador_key" ON "unidad"("identificador");`),
+      prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "residente_numeroDocumento_key" ON "residente"("numeroDocumento");`),
+      prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "residente_email_key" ON "residente"("email");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_unidadId_idx" ON "residente"("unidadId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_userId_idx" ON "residente"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_estado_idx" ON "residente"("estado");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_rol_idx" ON "residente"("rol");`),
+    ]);
+
+    // Crear foreign keys
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "residente" ADD CONSTRAINT IF NOT EXISTS "residente_unidadId_fkey" FOREIGN KEY ("unidadId") REFERENCES "unidad"("id") ON DELETE RESTRICT ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      if (!error.message?.includes('already exists') && error.code !== '42P16') {
+        // Ignorar si ya existe
+      }
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "residente" ADD CONSTRAINT IF NOT EXISTS "residente_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      if (!error.message?.includes('already exists') && error.code !== '42P16') {
+        // Ignorar si ya existe
       }
     }
   }

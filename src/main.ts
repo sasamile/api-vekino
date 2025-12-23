@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
 import { SubdomainInterceptor } from "./condominios/interceptors/subdomain.interceptor";
+import { BigIntSerializerInterceptor } from "./common/interceptors/bigint-serializer.interceptor";
 import cookieParser from "cookie-parser";
 
 async function bootstrap() {
@@ -24,6 +25,9 @@ async function bootstrap() {
 
   // Interceptor global para detectar subdominios
   app.useGlobalInterceptors(new SubdomainInterceptor());
+  
+  // Interceptor global para serializar BigInt a Number (necesario para CockroachDB)
+  app.useGlobalInterceptors(new BigIntSerializerInterceptor());
 
   // Si tendrás frontend separado, habilita CORS con credentials:
   app.enableCors({

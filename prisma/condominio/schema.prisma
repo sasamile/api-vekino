@@ -31,6 +31,8 @@ model User {
   // Relación para el dueño: un arrendatario pertenece a un dueño
   ownerId       String?
   owner         User?     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+  // Relación con Residente si tiene acceso a la plataforma
+  residente     Residente?
 
   @@unique([email])
   @@index([ownerId])
@@ -83,5 +85,74 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+enum TipoUnidad {
+  APARTAMENTO
+  CASA
+  LOCAL_COMERCIAL
+}
+
+enum EstadoUnidad {
+  OCUPADA
+  VACIA
+  EN_MANTENIMIENTO
+}
+
+enum TipoDocumento {
+  CC
+  CE
+  PASAPORTE
+  NIT
+  OTRO
+}
+
+enum RolResidente {
+  PROPIETARIO
+  ARRENDATARIO
+  RESIDENTE
+}
+
+model Unidad {
+  id                        String        @id @default(uuid())
+  identificador             String        // Ej: "Casa 127", "Apto 801"
+  tipo                      TipoUnidad
+  area                      Float?        // Área en m²
+  coeficienteCopropiedad    Float?        // Coeficiente de copropiedad (%)
+  valorCuotaAdministracion  Float?        // Valor de la cuota de administración
+  estado                    EstadoUnidad @default(VACIA)
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+  residentes                Residente[]
+
+  @@unique([identificador])
+  @@map("unidad")
+}
+
+model Residente {
+  id                      String        @id @default(uuid())
+  nombre                  String
+  apellidos               String
+  tipoDocumento           TipoDocumento
+  numeroDocumento         String        // Único en toda la plataforma
+  email                   String        // Único en toda la plataforma
+  telefono                String?       // Máximo 10 caracteres
+  rol                     RolResidente
+  estado                  Boolean       @default(true) // true = Activo, false = Inactivo
+  permitirAccesoPlataforma Boolean      @default(false)
+  unidadId                String
+  unidad                  Unidad        @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  userId                  String?       // Relación con User si tiene acceso a la plataforma
+  user                    User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  @@unique([numeroDocumento])
+  @@unique([email])
+  @@index([unidadId])
+  @@index([userId])
+  @@index([estado])
+  @@index([rol])
+  @@map("residente")
 }
 
