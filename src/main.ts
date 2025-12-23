@@ -59,12 +59,40 @@ async function bootstrap() {
       description: "Cookie de sesión de Better Auth",
     })
     .addServer("http://localhost:3000", "Servidor de desarrollo")
-    .addTag("auth", "Endpoints de autenticación")
-    .addTag("condominios", "Gestión de condominios")
-    .addTag("unidades", "Gestión de unidades")
+    .addTag("auth", "Autenticación - Endpoints de autenticación de superadministradores")
+    .addTag("condominios", "Condominios - Gestión de condominios")
+    .addTag("condominios-users", "Condominios - Usuarios - Gestión de usuarios de condominios")
+    .addTag("unidades", "Unidades - Gestión de unidades residenciales")
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, config, {
+    operationIdFactory: (controllerKey: string, methodKey: string) => methodKey,
+  });
+
+  // Limpiar tags duplicados generados automáticamente por Swagger
+  // Swagger genera tags basados en el nombre del controlador, pero queremos usar solo nuestros tags explícitos
+  if (document.paths) {
+    Object.keys(document.paths).forEach((path) => {
+      Object.keys(document.paths[path]).forEach((method) => {
+        const operation = document.paths[path][method];
+        if (operation.tags && Array.isArray(operation.tags)) {
+          // Remover tags que empiezan con mayúscula (generados automáticamente)
+          // y mantener solo los tags en minúscula que definimos explícitamente
+          operation.tags = operation.tags.filter((tag: string) => {
+            // Mantener solo tags que están en minúscula o que empiezan con minúscula
+            return tag === tag.toLowerCase() || tag.startsWith(tag[0].toLowerCase());
+          });
+          // Si hay múltiples tags, mantener solo el primero (el que definimos explícitamente)
+          if (operation.tags.length > 1) {
+            // Priorizar tags que definimos explícitamente
+            const explicitTags = ['auth', 'condominios', 'condominios-users', 'unidades'];
+            const explicitTag = operation.tags.find((tag: string) => explicitTags.includes(tag));
+            operation.tags = explicitTag ? [explicitTag] : [operation.tags[0]];
+          }
+        }
+      });
+    });
+  }
 
   // Configurar Swagger UI (puedes acceder a /api para ver la documentación)
   SwaggerModule.setup("api", app, document, {

@@ -46,7 +46,30 @@ async function generateOpenApiSpec() {
     .addTag("unidades", "Unidades - Gestión de unidades residenciales")
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, config, {
+    operationIdFactory: (controllerKey: string, methodKey: string) => methodKey,
+  });
+
+  // Limpiar tags duplicados generados automáticamente por Swagger
+  if (document.paths) {
+    Object.keys(document.paths).forEach((path) => {
+      Object.keys(document.paths[path]).forEach((method) => {
+        const operation = document.paths[path][method];
+        if (operation.tags && Array.isArray(operation.tags)) {
+          // Remover tags que empiezan con mayúscula (generados automáticamente)
+          operation.tags = operation.tags.filter((tag: string) => {
+            return tag === tag.toLowerCase() || tag.startsWith(tag[0].toLowerCase());
+          });
+          // Si hay múltiples tags, mantener solo el que definimos explícitamente
+          if (operation.tags.length > 1) {
+            const explicitTags = ['auth', 'condominios', 'condominios-users', 'unidades'];
+            const explicitTag = operation.tags.find((tag: string) => explicitTags.includes(tag));
+            operation.tags = explicitTag ? [explicitTag] : [operation.tags[0]];
+          }
+        }
+      });
+    });
+  }
 
   // Crear directorio docs si no existe
   const docsDir = join(process.cwd(), "docs");
