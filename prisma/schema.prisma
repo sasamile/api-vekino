@@ -51,6 +51,8 @@ enum Timezone {
 model Condominio {
   id              String   @id @default(uuid())
   name            String
+  // Subdominios
+  frontSubdomain  String?  // Subdominio público para el frontend (ej: las-flores)
   subdomain       String?  // Subdominio único para acceso (ej: condominio1)
   databaseUrl     String   // URL de conexión a la base de datos específica del condominio
   databaseName    String   // Nombre de la base de datos
@@ -82,8 +84,10 @@ model Condominio {
   users           User[]
 
   @@unique([databaseName])
+  @@unique([frontSubdomain])
   @@unique([subdomain])
   @@index([name])
+  @@index([frontSubdomain])
   @@index([subdomain])
   @@index([isActive])
   @@map("condominio")

@@ -98,10 +98,10 @@ export class UnidadesService {
         u.estado,
         u."createdAt"::text as "createdAt",
         u."updatedAt"::text as "updatedAt",
-        COUNT(r.id)::int as "totalResidentes"
+        COUNT(us.id)::int as "totalUsuarios"
       FROM "unidad" u
-      LEFT JOIN "residente" r ON u.id = r."unidadId" AND r.estado = true
-      GROUP BY u.id, u.identificador, u.tipo, u.area, u."coeficienteCopropiedad", 
+      LEFT JOIN "user" us ON u.id = us."unidadId"
+      GROUP BY u.id, u.identificador, u.tipo, u.area, u."coeficienteCopropiedad",
                u."valorCuotaAdministracion", u.estado, u."createdAt", u."updatedAt"
       ORDER BY u.identificador ASC
     `;
@@ -110,7 +110,7 @@ export class UnidadesService {
   }
 
   /**
-   * Obtiene todas las unidades con sus residentes asociados
+   * Obtiene todas las unidades con sus usuarios asociados
    */
   async getUnidadesWithResidentes(condominioId: string) {
     await this.condominiosService.findOne(condominioId);
@@ -133,34 +133,32 @@ export class UnidadesService {
       ORDER BY identificador ASC
     `;
 
-    // Para cada unidad, obtener sus residentes
+    // Para cada unidad, obtener sus usuarios
     const unidadesConResidentes = await Promise.all(
       unidades.map(async (unidad) => {
-        const residentes = await condominioPrisma.$queryRaw<any[]>`
+        const usuarios = await condominioPrisma.$queryRaw<any[]>`
           SELECT 
             id,
-            nombre,
-            apellidos,
+            name,
+            "firstName",
+            "lastName",
+            email,
             "tipoDocumento",
             "numeroDocumento",
-            email,
             telefono,
-            rol,
-            estado,
-            "permitirAccesoPlataforma",
+            role,
             "unidadId",
-            "userId",
             "createdAt"::text as "createdAt",
             "updatedAt"::text as "updatedAt"
-          FROM "residente"
+          FROM "user"
           WHERE "unidadId" = ${unidad.id}
-          ORDER BY nombre ASC, apellidos ASC
+          ORDER BY "firstName" ASC, "lastName" ASC
         `;
 
         return {
           ...unidad,
-          residentes: residentes || [],
-          totalResidentes: residentes.length,
+          usuarios: usuarios || [],
+          totalUsuarios: usuarios.length,
         };
       }),
     );
@@ -187,9 +185,9 @@ export class UnidadesService {
         u.estado,
         u."createdAt"::text as "createdAt",
         u."updatedAt"::text as "updatedAt",
-        COUNT(r.id)::int as "totalResidentes"
+        COUNT(us.id)::int as "totalUsuarios"
       FROM "unidad" u
-      LEFT JOIN "residente" r ON u.id = r."unidadId" AND r.estado = true
+      LEFT JOIN "user" us ON u.id = us."unidadId"
       WHERE u.id = ${unidadId}
       GROUP BY u.id, u.identificador, u.tipo, u.area, u."coeficienteCopropiedad", 
                u."valorCuotaAdministracion", u.estado, u."createdAt", u."updatedAt"
@@ -366,7 +364,7 @@ export class UnidadesService {
   }
 
   /**
-   * Elimina una unidad (solo si no tiene residentes asociados)
+   * Elimina una unidad (solo si no tiene usuarios asociados)
    */
   async deleteUnidad(condominioId: string, unidadId: string) {
     await this.condominiosService.findOne(condominioId);
@@ -375,15 +373,15 @@ export class UnidadesService {
 
     const unidad = await this.getUnidad(condominioId, unidadId);
 
-    // Verificar que no tenga residentes asociados
-    const residentes = await condominioPrisma.$queryRaw<any[]>`
-      SELECT COUNT(*) as total FROM "residente" WHERE "unidadId" = ${unidadId}
+    // Verificar que no tenga usuarios asociados
+    const usuarios = await condominioPrisma.$queryRaw<any[]>`
+      SELECT COUNT(*) as total FROM "user" WHERE "unidadId" = ${unidadId}
     `;
-    const totalResidentes = parseInt(residentes[0]?.total || '0', 10);
+    const totalUsuarios = parseInt(usuarios[0]?.total || '0', 10);
 
-    if (totalResidentes > 0) {
+    if (totalUsuarios > 0) {
       throw new BadRequestException(
-        `No se puede eliminar la unidad porque tiene ${totalResidentes} residente(s) asociado(s)`,
+        `No se puede eliminar la unidad porque tiene ${totalUsuarios} usuario(s) asociado(s)`,
       );
     }
 

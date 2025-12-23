@@ -13,12 +13,24 @@ import {
   Res,
   UseGuards,
   BadRequestException,
+  NotFoundException,
   UseInterceptors,
   UploadedFile,
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+  ApiConsumes,
+  ApiBearerAuth,
+  ApiCookieAuth,
+  ApiSecurity,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import { CondominiosService } from './condominios.service';
@@ -37,6 +49,7 @@ import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { Subdomain } from '../decorators/subdomain.decorator';
 
 
+@ApiTags('condominios')
 @Controller('condominios')
 export class CondominiosController {
   constructor(
@@ -49,6 +62,26 @@ export class CondominiosController {
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
   @UseInterceptors(FileInterceptor('logo'))
+  @ApiOperation({
+    summary: 'Crear un nuevo condominio',
+    description: 'Crea un nuevo condominio con su base de datos dedicada. Requiere rol SUPERADMIN.',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: CreateCondominioDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 201,
+    description: 'Condominio creado exitosamente',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN',
+  })
   async create(
     @Body() createCondominioDto: CreateCondominioDto,
     @UploadedFile(
@@ -66,8 +99,182 @@ export class CondominiosController {
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'Obtener todos los condominios',
+    description: 'Retorna una lista de todos los condominios registrados',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de condominios obtenida exitosamente',
+  })
   async findAll() {
     return this.condominiosService.findAll();
+  }
+
+  // Rutas específicas de usuarios - DEBEN ir antes de las rutas con :id
+  // El condominio se obtiene automáticamente del subdominio
+  @Post('users')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  @ApiOperation({
+    summary: 'Crear un nuevo usuario en el condominio',
+    description: 'Crea un nuevo usuario en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiBody({ type: CreateCondominioUserDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 201,
+    description: 'Usuario creado exitosamente',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o subdominio no detectado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN o ADMIN',
+  })
+  async createUser(
+    @Body() createUserDto: CreateCondominioUserDto,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.createUserInCondominio(
+      condominioId,
+      createUserDto,
+      req,
+    );
+  }
+
+  @Get('users')
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  @ApiOperation({
+    summary: 'Obtener todos los usuarios del condominio',
+    description: 'Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de usuarios obtenida exitosamente',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN o ADMIN',
+  })
+  async getUsers(@Req() req: Request) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.getUsersInCondominio(condominioId);
+  }
+
+  @Get('users/:userId')
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  async getUser(@Param('userId') userId: string, @Req() req: Request) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.getUserInCondominio(
+      condominioId,
+      userId,
+    );
+  }
+
+  @Patch('users/:userId/role')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  async updateUserRole(
+    @Param('userId') userId: string,
+    @Body('role') role: string,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.updateUserRoleInCondominio(
+      condominioId,
+      userId,
+      role,
+    );
+  }
+
+  @Put('users/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  @UseInterceptors(FileInterceptor('image'))
+  async updateUser(
+    @Param('userId') userId: string,
+    @Body() updateUserDto: UpdateCondominioUserDto,
+    @Req() req: Request,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    imageFile?: Express.Multer.File,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.updateUserInCondominio(
+      condominioId,
+      userId,
+      updateUserDto,
+      req,
+      imageFile,
+    );
+  }
+
+  @Patch('users/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  @UseInterceptors(FileInterceptor('image'))
+  async patchUser(
+    @Param('userId') userId: string,
+    @Body() updateUserDto: UpdateCondominioUserDto,
+    @Req() req: Request,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    imageFile?: Express.Multer.File,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.updateUserInCondominio(
+      condominioId,
+      userId,
+      updateUserDto,
+      req,
+      imageFile,
+    );
+  }
+
+  @Delete('users/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RoleGuard)
+  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @RequireCondominioAccess()
+  async deleteUser(@Param('userId') userId: string, @Req() req: Request) {
+    const condominioId = await this.getCondominioIdFromSubdomain(req);
+    return this.condominiosUsersService.deleteUserInCondominio(
+      condominioId,
+      userId,
+    );
   }
 
   @Get(':id')
@@ -143,6 +350,33 @@ export class CondominiosController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @AllowAnonymous()
+  @ApiOperation({
+    summary: 'Iniciar sesión como usuario de condominio',
+    description: 'Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.',
+  })
+  @ApiBody({ type: LoginCondominioUserDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Inicio de sesión exitoso',
+    schema: {
+      example: {
+        user: {
+          id: 'uuid',
+          email: 'juan.perez@example.com',
+          name: 'Juan Pérez',
+          role: 'ADMIN',
+        },
+        session: {
+          token: 'session_token',
+          expiresAt: '2024-12-31T23:59:59.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Credenciales inválidas',
+  })
   async login(
     @Body() loginDto: LoginCondominioUserDto,
     @Req() req: Request,
@@ -227,140 +461,27 @@ export class CondominiosController {
     }
   }
 
-  // Endpoints para gestionar usuarios dentro de condominios
-  // SUPERADMIN puede gestionar usuarios en cualquier condominio
-  // ADMIN solo puede gestionar usuarios en su propio condominio
-  @Post(':id/users')
-  @HttpCode(HttpStatus.CREATED)
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  async createUser(
-    @Param('id') condominioId: string,
-    @Body() createUserDto: CreateCondominioUserDto,
-    @Req() req: Request,
-  ) {
-    return this.condominiosUsersService.createUserInCondominio(
-      condominioId,
-      createUserDto,
-      req,
-    );
-  }
+  /**
+   * Obtiene el ID del condominio desde el subdominio del request
+   */
+  private async getCondominioIdFromSubdomain(req: Request): Promise<string> {
+    const subdomain = (req as any).subdomain;
+    
+    if (!subdomain) {
+      throw new BadRequestException(
+        'No se pudo identificar el condominio. El subdominio es requerido.',
+      );
+    }
 
-  @Get(':id/users')
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  async getUsers(@Param('id') condominioId: string) {
-    return this.condominiosUsersService.getUsersInCondominio(condominioId);
-  }
+    const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
+    
+    if (!condominio) {
+      throw new NotFoundException(
+        `Condominio no encontrado para el subdominio: ${subdomain}`,
+      );
+    }
 
-  @Get(':id/users/:userId')
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  async getUser(
-    @Param('id') condominioId: string,
-    @Param('userId') userId: string,
-  ) {
-    return this.condominiosUsersService.getUserInCondominio(
-      condominioId,
-      userId,
-    );
-  }
-
-  @Patch(':id/users/:userId/role')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  async updateUserRole(
-    @Param('id') condominioId: string,
-    @Param('userId') userId: string,
-    @Body('role') role: string,
-  ) {
-    return this.condominiosUsersService.updateUserRoleInCondominio(
-      condominioId,
-      userId,
-      role,
-    );
-  }
-
-  @Put(':id/users/:userId')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  @UseInterceptors(FileInterceptor('image'))
-  async updateUser(
-    @Param('id') condominioId: string,
-    @Param('userId') userId: string,
-    @Body() updateUserDto: UpdateCondominioUserDto,
-    @UploadedFile(
-      new ParseFilePipe({
-        fileIsRequired: false,
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
-        ],
-      }),
-    )
-    imageFile?: Express.Multer.File,
-    @Req() req?: Request,
-  ) {
-    return this.condominiosUsersService.updateUserInCondominio(
-      condominioId,
-      userId,
-      updateUserDto,
-      req,
-      imageFile,
-    );
-  }
-
-  @Patch(':id/users/:userId')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  @UseInterceptors(FileInterceptor('image'))
-  async patchUser(
-    @Param('id') condominioId: string,
-    @Param('userId') userId: string,
-    @Body() updateUserDto: UpdateCondominioUserDto,
-    @UploadedFile(
-      new ParseFilePipe({
-        fileIsRequired: false,
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
-        ],
-      }),
-    )
-    imageFile?: Express.Multer.File,
-    @Req() req?: Request,
-  ) {
-    return this.condominiosUsersService.updateUserInCondominio(
-      condominioId,
-      userId,
-      updateUserDto,
-      req,
-      imageFile,
-    );
-  }
-
-  @Delete(':id/users/:userId')
-  @HttpCode(HttpStatus.OK)
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
-  @RequireCondominioAccess()
-  async deleteUser(
-    @Param('id') condominioId: string,
-    @Param('userId') userId: string,
-  ) {
-    return this.condominiosUsersService.deleteUserInCondominio(
-      condominioId,
-      userId,
-    );
+    return condominio.id;
   }
 }
 

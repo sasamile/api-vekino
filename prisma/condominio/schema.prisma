@@ -10,32 +10,33 @@ datasource condominio_db {
 
 enum UserRole {
   ADMIN
-  USER
-  TENANT
+  PROPIETARIO
+  ARRENDATARIO
+  RESIDENTE
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  identificationNumber String? // Número de identificación (opcional)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  role          UserRole  @default(USER)
-  sessions      Session[]
-  accounts      Account[]
-  // Relación para arrendatarios: un usuario (dueño) puede tener múltiples arrendatarios
-  tenants       User[]    @relation("OwnerTenants")
-  // Relación para el dueño: un arrendatario pertenece a un dueño
-  ownerId       String?
-  owner         User?     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
-  // Relación con Residente si tiene acceso a la plataforma
-  residente     Residente?
+  id               String    @id
+  name             String
+  email            String
+  emailVerified    Boolean   @default(false)
+  image            String?
+  firstName        String?
+  lastName         String?
+  tipoDocumento    TipoDocumento?
+  numeroDocumento  String?
+  telefono         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  role             UserRole  @default(ADMIN)
+  unidadId         String?
+  unidad           Unidad?   @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  sessions         Session[]
+  accounts         Account[]
 
   @@unique([email])
-  @@index([ownerId])
+  @@unique([numeroDocumento])
+  @@index([unidadId])
   @@map("user")
 }
 
@@ -107,12 +108,6 @@ enum TipoDocumento {
   OTRO
 }
 
-enum RolResidente {
-  PROPIETARIO
-  ARRENDATARIO
-  RESIDENTE
-}
-
 model Unidad {
   id                        String        @id @default(uuid())
   identificador             String        // Ej: "Casa 127", "Apto 801"
@@ -123,36 +118,9 @@ model Unidad {
   estado                    EstadoUnidad @default(VACIA)
   createdAt                 DateTime      @default(now())
   updatedAt                 DateTime      @updatedAt
-  residentes                Residente[]
+  users                     User[]
 
   @@unique([identificador])
   @@map("unidad")
-}
-
-model Residente {
-  id                      String        @id @default(uuid())
-  nombre                  String
-  apellidos               String
-  tipoDocumento           TipoDocumento
-  numeroDocumento         String        // Único en toda la plataforma
-  email                   String        // Único en toda la plataforma
-  telefono                String?       // Máximo 10 caracteres
-  rol                     RolResidente
-  estado                  Boolean       @default(true) // true = Activo, false = Inactivo
-  permitirAccesoPlataforma Boolean      @default(false)
-  unidadId                String
-  unidad                  Unidad        @relation(fields: [unidadId], references: [id], onDelete: Restrict)
-  userId                  String?       // Relación con User si tiene acceso a la plataforma
-  user                    User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
-
-  @@unique([numeroDocumento])
-  @@unique([email])
-  @@index([unidadId])
-  @@index([userId])
-  @@index([estado])
-  @@index([rol])
-  @@map("residente")
 }
 

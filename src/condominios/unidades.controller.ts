@@ -12,6 +12,14 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBearerAuth,
+  ApiCookieAuth,
+} from '@nestjs/swagger';
 import { UnidadesService } from './unidades.service';
 import { CreateUnidadDto } from './dto/create-unidad.dto';
 import { UpdateUnidadDto } from './dto/update-unidad.dto';
@@ -24,6 +32,7 @@ import {
 import { Subdomain } from '../decorators/subdomain.decorator';
 import { CondominiosService } from './condominios.service';
 
+@ApiTags('unidades')
 @Controller('unidades')
 @UseGuards(RoleGuard)
 @RequireRole(['SUPERADMIN', 'ADMIN'])
@@ -48,6 +57,24 @@ export class UnidadesController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Crear una nueva unidad',
+    description: 'Crea una nueva unidad en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 201,
+    description: 'Unidad creada exitosamente',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o subdominio no detectado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN o ADMIN',
+  })
   async create(
     @Subdomain() subdomain: string | null,
     @Body() createUnidadDto: CreateUnidadDto,
@@ -58,6 +85,16 @@ export class UnidadesController {
 
   @Get('with-residentes')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener todas las unidades con residentes',
+    description: 'Retorna todas las unidades del condominio incluyendo información de residentes asociados',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de unidades con residentes obtenida exitosamente',
+  })
   async findAllWithResidentes(@Subdomain() subdomain: string | null) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     return this.unidadesService.getUnidadesWithResidentes(condominioId);
@@ -65,6 +102,16 @@ export class UnidadesController {
 
   @Get()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener todas las unidades',
+    description: 'Retorna todas las unidades del condominio detectado del subdominio',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de unidades obtenida exitosamente',
+  })
   async findAll(@Subdomain() subdomain: string | null) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     return this.unidadesService.getUnidades(condominioId);
@@ -72,6 +119,25 @@ export class UnidadesController {
 
   @Get(':unidadId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener una unidad por ID',
+    description: 'Retorna los detalles de una unidad específica',
+  })
+  @ApiParam({
+    name: 'unidadId',
+    description: 'ID de la unidad',
+    example: 'uuid',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Unidad obtenida exitosamente',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Unidad no encontrada',
+  })
   async findOne(
     @Subdomain() subdomain: string | null,
     @Param('unidadId') unidadId: string,
@@ -122,6 +188,20 @@ export class UnidadesController {
 
   @Post('bulk-upload')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cargar múltiples unidades',
+    description: 'Crea múltiples unidades en el condominio mediante carga masiva',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Unidades cargadas exitosamente',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos',
+  })
   async bulkUpload(
     @Subdomain() subdomain: string | null,
     @Body() bulkUploadDto: BulkUploadUnidadesDto,

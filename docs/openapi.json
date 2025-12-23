@@ -1,0 +1,1210 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/auth/superadmin/register": {
+      "post": {
+        "description": "Crea una nueva cuenta de superadministrador en el sistema",
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterSuperadminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Superadministrador registrado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "user": {
+                      "id": "uuid",
+                      "email": "admin@vekino.com",
+                      "name": "Juan Pérez",
+                      "role": "SUPERADMIN"
+                    },
+                    "session": {
+                      "token": "session_token",
+                      "expiresAt": "2024-12-31T23:59:59.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos de registro inválidos"
+          }
+        },
+        "summary": "Registrar un nuevo superadministrador",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/superadmin/login": {
+      "post": {
+        "description": "Autentica un superadministrador y establece una sesión",
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginSuperadminDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inicio de sesión exitoso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "user": {
+                      "id": "uuid",
+                      "email": "admin@vekino.com",
+                      "name": "Juan Pérez",
+                      "role": "SUPERADMIN"
+                    },
+                    "session": {
+                      "token": "session_token",
+                      "expiresAt": "2024-12-31T23:59:59.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales inválidas"
+          }
+        },
+        "summary": "Iniciar sesión como superadministrador",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/condominios": {
+      "post": {
+        "description": "Crea un nuevo condominio con su base de datos dedicada. Requiere rol SUPERADMIN.",
+        "operationId": "CondominiosController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCondominioDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Condominio creado exitosamente"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          },
+          "403": {
+            "description": "No autorizado - Se requiere rol SUPERADMIN"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Crear un nuevo condominio",
+        "tags": [
+          "condominios"
+        ]
+      },
+      "get": {
+        "description": "Retorna una lista de todos los condominios registrados",
+        "operationId": "CondominiosController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lista de condominios obtenida exitosamente"
+          }
+        },
+        "summary": "Obtener todos los condominios",
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/users": {
+      "post": {
+        "description": "Crea un nuevo usuario en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.",
+        "operationId": "CondominiosController_createUser",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCondominioUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Usuario creado exitosamente"
+          },
+          "400": {
+            "description": "Datos inválidos o subdominio no detectado"
+          },
+          "403": {
+            "description": "No autorizado - Se requiere rol SUPERADMIN o ADMIN"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Crear un nuevo usuario en el condominio",
+        "tags": [
+          "condominios"
+        ]
+      },
+      "get": {
+        "description": "Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.",
+        "operationId": "CondominiosController_getUsers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lista de usuarios obtenida exitosamente"
+          },
+          "403": {
+            "description": "No autorizado - Se requiere rol SUPERADMIN o ADMIN"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Obtener todos los usuarios del condominio",
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/users/{userId}": {
+      "get": {
+        "operationId": "CondominiosController_getUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      },
+      "put": {
+        "operationId": "CondominiosController_updateUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCondominioUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      },
+      "patch": {
+        "operationId": "CondominiosController_patchUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCondominioUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      },
+      "delete": {
+        "operationId": "CondominiosController_deleteUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/users/{userId}/role": {
+      "patch": {
+        "operationId": "CondominiosController_updateUserRole",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/{id}": {
+      "get": {
+        "operationId": "CondominiosController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      },
+      "put": {
+        "operationId": "CondominiosController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCondominioDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/{id}/deactivate": {
+      "post": {
+        "operationId": "CondominiosController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/{id}/delete": {
+      "post": {
+        "operationId": "CondominiosController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/validate-subdomain/{subdomain}": {
+      "get": {
+        "operationId": "CondominiosController_validateSubdomain",
+        "parameters": [
+          {
+            "name": "subdomain",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/config": {
+      "get": {
+        "operationId": "CondominiosController_getConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/condominios/login": {
+      "post": {
+        "description": "Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.",
+        "operationId": "CondominiosController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginCondominioUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inicio de sesión exitoso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "user": {
+                      "id": "uuid",
+                      "email": "juan.perez@example.com",
+                      "name": "Juan Pérez",
+                      "role": "ADMIN"
+                    },
+                    "session": {
+                      "token": "session_token",
+                      "expiresAt": "2024-12-31T23:59:59.000Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales inválidas"
+          }
+        },
+        "summary": "Iniciar sesión como usuario de condominio",
+        "tags": [
+          "condominios"
+        ]
+      }
+    },
+    "/unidades": {
+      "post": {
+        "description": "Crea una nueva unidad en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.",
+        "operationId": "UnidadesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnidadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Unidad creada exitosamente"
+          },
+          "400": {
+            "description": "Datos inválidos o subdominio no detectado"
+          },
+          "403": {
+            "description": "No autorizado - Se requiere rol SUPERADMIN o ADMIN"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Crear una nueva unidad",
+        "tags": [
+          "unidades"
+        ]
+      },
+      "get": {
+        "description": "Retorna todas las unidades del condominio detectado del subdominio",
+        "operationId": "UnidadesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lista de unidades obtenida exitosamente"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Obtener todas las unidades",
+        "tags": [
+          "unidades"
+        ]
+      }
+    },
+    "/unidades/with-residentes": {
+      "get": {
+        "description": "Retorna todas las unidades del condominio incluyendo información de residentes asociados",
+        "operationId": "UnidadesController_findAllWithResidentes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lista de unidades con residentes obtenida exitosamente"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Obtener todas las unidades con residentes",
+        "tags": [
+          "unidades"
+        ]
+      }
+    },
+    "/unidades/{unidadId}": {
+      "get": {
+        "description": "Retorna los detalles de una unidad específica",
+        "operationId": "UnidadesController_findOne",
+        "parameters": [
+          {
+            "name": "unidadId",
+            "required": true,
+            "in": "path",
+            "description": "ID de la unidad",
+            "schema": {
+              "example": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unidad obtenida exitosamente"
+          },
+          "404": {
+            "description": "Unidad no encontrada"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Obtener una unidad por ID",
+        "tags": [
+          "unidades"
+        ]
+      },
+      "put": {
+        "operationId": "UnidadesController_update",
+        "parameters": [
+          {
+            "name": "unidadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUnidadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "unidades"
+        ]
+      },
+      "patch": {
+        "operationId": "UnidadesController_patch",
+        "parameters": [
+          {
+            "name": "unidadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUnidadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "unidades"
+        ]
+      },
+      "delete": {
+        "operationId": "UnidadesController_delete",
+        "parameters": [
+          {
+            "name": "unidadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "unidades"
+        ]
+      }
+    },
+    "/unidades/bulk-upload": {
+      "post": {
+        "description": "Crea múltiples unidades en el condominio mediante carga masiva",
+        "operationId": "UnidadesController_bulkUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUploadUnidadesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unidades cargadas exitosamente"
+          },
+          "400": {
+            "description": "Datos inválidos"
+          }
+        },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cargar múltiples unidades",
+        "tags": [
+          "unidades"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "API Vekino",
+    "description": "API para gestión de condominios",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Endpoints de autenticación"
+    },
+    {
+      "name": "condominios",
+      "description": "Gestión de condominios"
+    },
+    {
+      "name": "unidades",
+      "description": "Gestión de unidades"
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Servidor de desarrollo"
+    },
+    {
+      "url": "https://api.vekino.com",
+      "description": "Servidor de producción"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "JWT-auth": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "name": "JWT",
+        "description": "Token de autenticación JWT",
+        "in": "header"
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Cookie de sesión de Better Auth"
+      }
+    },
+    "schemas": {
+      "RegisterSuperadminDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Correo electrónico del superadministrador",
+            "example": "admin@vekino.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Contraseña del superadministrador (mínimo 8 caracteres)",
+            "example": "password123",
+            "minLength": 8
+          },
+          "name": {
+            "type": "string",
+            "description": "Nombre completo del superadministrador",
+            "example": "Juan Pérez"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "name"
+        ]
+      },
+      "LoginSuperadminDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Correo electrónico del superadministrador",
+            "example": "admin@vekino.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Contraseña del superadministrador",
+            "example": "password123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "CreateCondominioDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre del condominio",
+            "example": "Condominio Las Flores",
+            "minLength": 3
+          },
+          "nit": {
+            "type": "string",
+            "description": "NIT / Identificación Tributaria",
+            "example": "900123456-7"
+          },
+          "address": {
+            "type": "string",
+            "description": "Dirección física del condominio",
+            "example": "Calle 123 #45-67"
+          },
+          "city": {
+            "type": "string",
+            "description": "Ciudad donde se encuentra el condominio",
+            "example": "Bogotá"
+          },
+          "country": {
+            "type": "string",
+            "description": "País donde se encuentra el condominio",
+            "example": "Colombia"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Zona horaria del condominio",
+            "enum": [
+              "AMERICA_BOGOTA",
+              "AMERICA_MEXICO_CITY",
+              "AMERICA_LIMA",
+              "AMERICA_SANTIAGO",
+              "AMERICA_BUENOS_AIRES",
+              "AMERICA_CARACAS",
+              "AMERICA_MONTEVIDEO",
+              "AMERICA_ASUNCION",
+              "AMERICA_LA_PAZ",
+              "AMERICA_QUITO",
+              "AMERICA_GUAYAQUIL",
+              "AMERICA_PANAMA",
+              "AMERICA_MANAGUA",
+              "AMERICA_SAN_JOSE",
+              "AMERICA_TEGUCIGALPA",
+              "AMERICA_GUATEMALA",
+              "AMERICA_SANTO_DOMINGO",
+              "AMERICA_HAVANA",
+              "UTC"
+            ],
+            "example": "AMERICA_BOGOTA"
+          },
+          "frontSubdomain": {
+            "type": "string",
+            "description": "Subdominio usado por el frontend (ej: las-flores). Solo letras minúsculas, números y guiones",
+            "example": "las-flores",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "subdomain": {
+            "type": "string",
+            "description": "Subdominio único para acceso (opcional, se genera automáticamente desde frontSubdomain)",
+            "example": "condominio1",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "logo": {
+            "type": "string",
+            "description": "URL del logo (se genera automáticamente al subir imagen)",
+            "example": "https://example.com/logo.png"
+          },
+          "primaryColor": {
+            "type": "string",
+            "description": "Color principal en formato hexadecimal",
+            "example": "#3B82F6",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          },
+          "subscriptionPlan": {
+            "type": "string",
+            "description": "Plan de suscripción del condominio",
+            "enum": [
+              "BASICO",
+              "PRO",
+              "ENTERPRISE"
+            ],
+            "example": "BASICO"
+          },
+          "unitLimit": {
+            "type": "number",
+            "description": "Límite de unidades permitidas",
+            "example": 100,
+            "minimum": 1
+          },
+          "planExpiresAt": {
+            "type": "string",
+            "description": "Fecha de vencimiento del plan (ISO 8601)",
+            "example": "2024-12-31T23:59:59.000Z"
+          },
+          "activeModules": {
+            "description": "Módulos activos del condominio",
+            "example": [
+              "reservas",
+              "documentos",
+              "pqrs"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "databaseName": {
+            "type": "string",
+            "description": "Nombre de la base de datos (opcional, se genera automáticamente desde el nombre)",
+            "example": "condominio_las_flores"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CreateCondominioUserDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre completo del usuario",
+            "example": "Juan Pérez"
+          },
+          "email": {
+            "type": "string",
+            "description": "Correo electrónico del usuario",
+            "example": "juan.perez@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Contraseña del usuario (mínimo 6 caracteres)",
+            "example": "password123",
+            "minLength": 6
+          },
+          "role": {
+            "type": "string",
+            "description": "Rol del usuario en el condominio",
+            "enum": [
+              "ADMIN",
+              "PROPIETARIO",
+              "ARRENDATARIO",
+              "RESIDENTE"
+            ],
+            "example": "ADMIN"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "Primer nombre (requerido para PROPIETARIO, ARRENDATARIO, RESIDENTE)",
+            "example": "Juan"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Apellido (requerido para PROPIETARIO, ARRENDATARIO, RESIDENTE)",
+            "example": "Pérez"
+          },
+          "tipoDocumento": {
+            "type": "string",
+            "description": "Tipo de documento de identidad",
+            "example": "CC"
+          },
+          "numeroDocumento": {
+            "type": "string",
+            "description": "Número de documento de identidad",
+            "example": "1234567890"
+          },
+          "telefono": {
+            "type": "string",
+            "description": "Número de teléfono",
+            "example": "+57 300 123 4567"
+          },
+          "unidadId": {
+            "type": "string",
+            "description": "ID de la unidad asociada al usuario",
+            "example": "uuid"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "password",
+          "role"
+        ]
+      },
+      "UpdateCondominioUserDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre completo del usuario",
+            "example": "Juan Pérez"
+          },
+          "email": {
+            "type": "string",
+            "description": "Correo electrónico del usuario",
+            "example": "juan.perez@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Nueva contraseña (mínimo 6 caracteres)",
+            "example": "newpassword123",
+            "minLength": 6
+          },
+          "role": {
+            "type": "string",
+            "description": "Rol del usuario en el condominio",
+            "enum": [
+              "ADMIN",
+              "PROPIETARIO",
+              "ARRENDATARIO",
+              "RESIDENTE"
+            ],
+            "example": "ADMIN"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "Primer nombre",
+            "example": "Juan"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Apellido",
+            "example": "Pérez"
+          },
+          "tipoDocumento": {
+            "type": "string",
+            "description": "Tipo de documento de identidad",
+            "example": "CC"
+          },
+          "numeroDocumento": {
+            "type": "string",
+            "description": "Número de documento de identidad",
+            "example": "1234567890"
+          },
+          "telefono": {
+            "type": "string",
+            "description": "Número de teléfono",
+            "example": "+57 300 123 4567"
+          },
+          "unidadId": {
+            "type": "string",
+            "description": "ID de la unidad asociada al usuario",
+            "example": "uuid"
+          }
+        }
+      },
+      "UpdateCondominioDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "LoginCondominioUserDto": {
+        "type": "object",
+        "properties": {
+          "condominioId": {
+            "type": "string",
+            "description": "ID del condominio (opcional, se detecta del subdominio si no se proporciona)",
+            "example": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "description": "Correo electrónico del usuario",
+            "example": "juan.perez@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "Contraseña del usuario",
+            "example": "password123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "CreateUnidadDto": {
+        "type": "object",
+        "properties": {
+          "identificador": {
+            "type": "string",
+            "description": "Identificador único de la unidad",
+            "example": "Apto 801"
+          },
+          "tipo": {
+            "type": "string",
+            "description": "Tipo de unidad",
+            "enum": [
+              "APARTAMENTO",
+              "CASA",
+              "LOCAL_COMERCIAL"
+            ],
+            "example": "APARTAMENTO"
+          },
+          "area": {
+            "type": "number",
+            "description": "Área de la unidad en metros cuadrados",
+            "example": 75.5,
+            "minimum": 0
+          },
+          "coeficienteCopropiedad": {
+            "type": "number",
+            "description": "Coeficiente de copropiedad en porcentaje",
+            "example": 15.5,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "valorCuotaAdministracion": {
+            "type": "number",
+            "description": "Valor de la cuota de administración",
+            "example": 250000,
+            "minimum": 0
+          },
+          "estado": {
+            "type": "string",
+            "description": "Estado actual de la unidad",
+            "enum": [
+              "OCUPADA",
+              "VACIA",
+              "EN_MANTENIMIENTO"
+            ],
+            "example": "OCUPADA"
+          }
+        },
+        "required": [
+          "identificador",
+          "tipo"
+        ]
+      },
+      "UpdateUnidadDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "BulkUploadUnidadesDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}

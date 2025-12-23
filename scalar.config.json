@@ -1,0 +1,11 @@
+{
+  "$schema": "https://cdn.scalar.com/schema/scalar-config.json",
+  "references": [
+    {
+      "name": "API Vekino",
+      "path": "docs/openapi.json"
+    }
+  ],
+  "publishOnMerge": true
+}
+

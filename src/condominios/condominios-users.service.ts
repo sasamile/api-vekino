@@ -43,7 +43,6 @@ export class CondominiosUsersService {
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
     // Verificar que el email no exista en este condominio
-    // Usar queryRaw para evitar problemas con campos que no existen en el schema del condominio
     const existingUsers = await condominioPrisma.$queryRaw<any[]>`
       SELECT id, email, name FROM "user" WHERE email = ${dto.email} LIMIT 1
     `;
@@ -55,29 +54,66 @@ export class CondominiosUsersService {
       );
     }
 
-    try {
-      // Asegurar que el campo identificationNumber existe en la tabla
-      try {
-        // Verificar si el campo existe
-        await condominioPrisma.$queryRaw`SELECT "identificationNumber" FROM "user" LIMIT 1`;
-      } catch (error: any) {
-        // Si el campo no existe, agregarlo
-        if (error.message?.includes('does not exist') || error.code === '42703') {
-          try {
-            await condominioPrisma.$executeRaw`
-              ALTER TABLE "user" ADD COLUMN "identificationNumber" STRING;
-            `;
-            console.log('✅ Campo identificationNumber agregado a la tabla user');
-          } catch (alterError: any) {
-            // Si falla porque ya existe o por otro motivo, continuar
-            if (!alterError.message?.includes('already exists') && alterError.code !== '42701') {
-              console.warn('Advertencia al agregar campo identificationNumber:', alterError.message);
-            }
-          }
-        } else {
-          throw error;
-        }
+    // Validar campos requeridos según el rol
+    // Para PROPIETARIO, ARRENDATARIO y RESIDENTE, se requieren datos personales y unidad
+    if (dto.role !== 'ADMIN') {
+      if (!dto.firstName || !dto.firstName.trim()) {
+        throw new BadRequestException(
+          'firstName es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
       }
+      if (!dto.lastName || !dto.lastName.trim()) {
+        throw new BadRequestException(
+          'lastName es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!dto.tipoDocumento || !dto.tipoDocumento.trim()) {
+        throw new BadRequestException(
+          'tipoDocumento es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!dto.numeroDocumento || !dto.numeroDocumento.trim()) {
+        throw new BadRequestException(
+          'numeroDocumento es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!dto.unidadId || !dto.unidadId.trim()) {
+        throw new BadRequestException(
+          'unidadId es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+    }
+
+    // Verificar número de documento si viene
+    if (dto.numeroDocumento) {
+      const existingDocs = await condominioPrisma.$queryRaw<any[]>`
+        SELECT id FROM "user" WHERE "numeroDocumento" = ${dto.numeroDocumento} LIMIT 1
+      `;
+      if (existingDocs[0]) {
+        throw new BadRequestException(
+          `Ya existe un usuario con el número de documento ${dto.numeroDocumento} en este condominio`,
+        );
+      }
+    }
+
+    // Validar unidad si se envía
+    if (dto.unidadId) {
+      const unidades = await condominioPrisma.$queryRaw<any[]>`
+        SELECT id FROM "unidad" WHERE id = ${dto.unidadId} LIMIT 1
+      `;
+      if (!unidades[0]) {
+        throw new BadRequestException(
+          `Unidad con ID ${dto.unidadId} no encontrada en este condominio`,
+        );
+      }
+    }
+
+    try {
+      // Asegurar que el enum UserRole tenga los valores correctos
+      await this.ensureUserRoleEnum(condominioPrisma);
+      
+      // Asegurar que las columnas nuevas existan en la tabla user
+      await this.ensureUserColumnsExist(condominioPrisma);
 
       // Crear el usuario directamente usando SQL para evitar problemas con el schema
       const { randomUUID } = await import('crypto');
@@ -102,8 +138,19 @@ export class CondominiosUsersService {
 
       // Crear el usuario en la base de datos
       await condominioPrisma.$executeRaw`
-        INSERT INTO "user" (id, name, email, "emailVerified", role, "identificationNumber", "createdAt", "updatedAt")
-        VALUES (${userId}, ${dto.name}, ${dto.email}, false, ${dto.role}::"UserRole", ${dto.identificationNumber || null}, NOW(), NOW())
+        INSERT INTO "user" (
+          id, name, email, "emailVerified", role,
+          "firstName", "lastName", "tipoDocumento", "numeroDocumento", telefono,
+          "unidadId",
+          "createdAt", "updatedAt"
+        )
+        VALUES (
+          ${userId}, ${dto.name}, ${dto.email}, false, ${dto.role}::"UserRole",
+          ${dto.firstName || null}, ${dto.lastName || null}, ${dto.tipoDocumento || null},
+          ${dto.numeroDocumento || null}, ${dto.telefono || null},
+          ${dto.unidadId || null},
+          NOW(), NOW()
+        )
       `;
 
       // Crear la cuenta con la contraseña hasheada
@@ -211,7 +258,57 @@ export class CondominiosUsersService {
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
+    // Asegurar que el enum UserRole tenga los valores correctos
+    await this.ensureUserRoleEnum(condominioPrisma);
+    
+    // Asegurar que las columnas nuevas existan en la tabla user
+    await this.ensureUserColumnsExist(condominioPrisma);
+
     const user = await this.getUserInCondominio(condominioId, userId);
+
+    // Determinar el rol final (el nuevo si se actualiza, o el actual)
+    const finalRole = dto.role !== undefined ? dto.role : user.role;
+
+    // Validar campos requeridos según el rol final
+    // Para PROPIETARIO, ARRENDATARIO y RESIDENTE, se requieren datos personales y unidad
+    if (finalRole !== 'ADMIN') {
+      // Si se cambia de ADMIN a otro rol, todos los campos deben venir en el DTO
+      const isChangingFromAdmin = user.role === 'ADMIN' && dto.role !== undefined && dto.role !== 'ADMIN';
+      
+      // Verificar que los campos requeridos estén presentes
+      // Si se cambia de ADMIN, deben venir en el DTO; si no, pueden venir en el DTO o ya estar en el usuario
+      const firstName = dto.firstName !== undefined ? dto.firstName : (isChangingFromAdmin ? null : user.firstName);
+      const lastName = dto.lastName !== undefined ? dto.lastName : (isChangingFromAdmin ? null : user.lastName);
+      const tipoDocumento = dto.tipoDocumento !== undefined ? dto.tipoDocumento : (isChangingFromAdmin ? null : user.tipoDocumento);
+      const numeroDocumento = dto.numeroDocumento !== undefined ? dto.numeroDocumento : (isChangingFromAdmin ? null : user.numeroDocumento);
+      const unidadId = dto.unidadId !== undefined ? dto.unidadId : (isChangingFromAdmin ? null : user.unidadId);
+
+      if (!firstName || !firstName.trim()) {
+        throw new BadRequestException(
+          'firstName es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!lastName || !lastName.trim()) {
+        throw new BadRequestException(
+          'lastName es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!tipoDocumento || !tipoDocumento.trim()) {
+        throw new BadRequestException(
+          'tipoDocumento es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!numeroDocumento || !numeroDocumento.trim()) {
+        throw new BadRequestException(
+          'numeroDocumento es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+      if (!unidadId || !unidadId.trim()) {
+        throw new BadRequestException(
+          'unidadId es requerido para roles PROPIETARIO, ARRENDATARIO y RESIDENTE',
+        );
+      }
+    }
 
     // Verificar si el email ya existe (si se está actualizando)
     if (dto.email && dto.email !== user.email) {
@@ -281,10 +378,12 @@ export class CondominiosUsersService {
     if (dto.role !== undefined) {
       updateData.role = dto.role as any;
     }
-
-    if (dto.identificationNumber !== undefined) {
-      updateData.identificationNumber = dto.identificationNumber;
-    }
+    if (dto.firstName !== undefined) updateData.firstName = dto.firstName;
+    if (dto.lastName !== undefined) updateData.lastName = dto.lastName;
+    if (dto.tipoDocumento !== undefined) updateData.tipoDocumento = dto.tipoDocumento;
+    if (dto.numeroDocumento !== undefined) updateData.numeroDocumento = dto.numeroDocumento;
+    if (dto.telefono !== undefined) updateData.telefono = dto.telefono;
+    if (dto.unidadId !== undefined) updateData.unidadId = dto.unidadId;
 
     // Procesar y subir imagen si se proporciona
     let imageUrl: string | undefined = undefined;
@@ -310,6 +409,37 @@ export class CondominiosUsersService {
       }
     }
 
+    // Validar número de documento si se actualiza
+    if (
+      updateData.numeroDocumento !== undefined &&
+      updateData.numeroDocumento !== user.numeroDocumento
+    ) {
+      const existingDocs = await condominioPrisma.$queryRaw<any[]>`
+        SELECT id FROM "user" WHERE "numeroDocumento" = ${updateData.numeroDocumento} AND id != ${userId} LIMIT 1
+      `;
+      if (existingDocs[0]) {
+        throw new BadRequestException(
+          `Ya existe un usuario con el número de documento ${updateData.numeroDocumento} en este condominio`,
+        );
+      }
+    }
+
+    // Validar unidad si se actualiza
+    if (updateData.unidadId !== undefined) {
+      if (updateData.unidadId === null) {
+        // permitir null
+      } else {
+        const unidades = await condominioPrisma.$queryRaw<any[]>`
+          SELECT id FROM "unidad" WHERE id = ${updateData.unidadId} LIMIT 1
+        `;
+        if (!unidades[0]) {
+          throw new BadRequestException(
+            `Unidad con ID ${updateData.unidadId} no encontrada en este condominio`,
+          );
+        }
+      }
+    }
+
     // Actualizar el usuario usando SQL directo (hacer un solo UPDATE)
     const updates: string[] = [];
     const values: any[] = [];
@@ -326,34 +456,30 @@ export class CondominiosUsersService {
       updates.push(`role = $${values.length + 1}::"UserRole"`);
       values.push(updateData.role);
     }
-    if (updateData.identificationNumber !== undefined) {
-      // Asegurar que el campo identificationNumber existe en la tabla
-      try {
-        // Verificar si el campo existe
-        await condominioPrisma.$queryRaw`SELECT "identificationNumber" FROM "user" LIMIT 1`;
-      } catch (error: any) {
-        // Si el campo no existe, agregarlo
-        if (error.message?.includes('does not exist') || error.code === '42703') {
-          try {
-            await condominioPrisma.$executeRaw`
-              ALTER TABLE "user" ADD COLUMN "identificationNumber" STRING;
-            `;
-            console.log('✅ Campo identificationNumber agregado a la tabla user');
-          } catch (alterError: any) {
-            // Si falla porque ya existe o por otro motivo, continuar
-            if (!alterError.message?.includes('already exists') && alterError.code !== '42701') {
-              console.warn('Advertencia al agregar campo identificationNumber:', alterError.message);
-            }
-          }
-        } else {
-          throw error;
-        }
-      }
-      
-      updates.push(`"identificationNumber" = $${values.length + 1}`);
-      values.push(updateData.identificationNumber || null);
+    if (updateData.firstName !== undefined) {
+      updates.push(`"firstName" = $${values.length + 1}`);
+      values.push(updateData.firstName);
     }
-
+    if (updateData.lastName !== undefined) {
+      updates.push(`"lastName" = $${values.length + 1}`);
+      values.push(updateData.lastName);
+    }
+    if (updateData.tipoDocumento !== undefined) {
+      updates.push(`"tipoDocumento" = $${values.length + 1}`);
+      values.push(updateData.tipoDocumento);
+    }
+    if (updateData.numeroDocumento !== undefined) {
+      updates.push(`"numeroDocumento" = $${values.length + 1}`);
+      values.push(updateData.numeroDocumento);
+    }
+    if (updateData.telefono !== undefined) {
+      updates.push(`telefono = $${values.length + 1}`);
+      values.push(updateData.telefono);
+    }
+    if (updateData.unidadId !== undefined) {
+      updates.push(`"unidadId" = $${values.length + 1}`);
+      values.push(updateData.unidadId);
+    }
     if (updateData.image !== undefined) {
       updates.push(`image = $${values.length + 1}`);
       values.push(updateData.image);
@@ -562,6 +688,223 @@ export class CondominiosUsersService {
       },
       headers: undefined, // No retornar headers - el controlador manejará las cookies
     };
+  }
+
+  // Cache para evitar verificaciones repetidas en la misma instancia
+  private columnsChecked = new Set<string>();
+  private enumChecked = new Set<string>();
+
+  /**
+   * Asegura que el enum UserRole tenga los valores correctos
+   */
+  private async ensureUserRoleEnum(condominioPrisma: any) {
+    const cacheKey = (condominioPrisma as any)._connectionUrl || 'default';
+    
+    // Si ya verificamos este enum para esta BD, saltar
+    if (this.enumChecked.has(cacheKey)) {
+      return;
+    }
+
+    try {
+      // Verificar qué valores tiene el enum actual
+      const enumValues = (await condominioPrisma.$queryRawUnsafe(`
+        SELECT unnest(enum_range(NULL::"UserRole"))::text as value
+      `)) as any[];
+
+      const existingValues = new Set(enumValues.map((v: any) => v.value));
+      const requiredValues = new Set(['ADMIN', 'PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE']);
+
+      // Verificar si faltan valores nuevos
+      const missingValues = Array.from(requiredValues).filter(
+        (val) => !existingValues.has(val),
+      );
+
+      if (missingValues.length > 0) {
+        console.log(`🔄 Actualizando enum UserRole: agregando ${missingValues.join(', ')}`);
+
+        // Agregar valores faltantes al enum (CockroachDB no soporta IF NOT EXISTS)
+        for (const value of missingValues) {
+          try {
+            await condominioPrisma.$executeRawUnsafe(
+              `ALTER TYPE "UserRole" ADD VALUE '${value}'`,
+            );
+            console.log(`✅ Valor ${value} agregado al enum UserRole`);
+          } catch (error: any) {
+            // Ignorar si ya existe
+            if (
+              error.message?.includes('already exists') ||
+              error.message?.includes('duplicate') ||
+              error.code === '42710'
+            ) {
+              // Valor ya existe, continuar
+            } else {
+              console.warn(`Advertencia al agregar valor ${value} al enum:`, error.message);
+            }
+          }
+        }
+
+        // Si hay valores antiguos (USER, TENANT) que necesitan migración
+        if (existingValues.has('USER') || existingValues.has('TENANT')) {
+          console.log('⚠️  Detectados valores antiguos en enum UserRole. Migrando datos...');
+          
+          // Migrar USER a RESIDENTE (valor por defecto más cercano)
+          if (existingValues.has('USER')) {
+            try {
+              await condominioPrisma.$executeRawUnsafe(`
+                UPDATE "user" SET role = 'RESIDENTE'::"UserRole" WHERE role = 'USER'::"UserRole"
+              `);
+              console.log('✅ Migrados usuarios con rol USER a RESIDENTE');
+            } catch (error: any) {
+              console.warn('Advertencia al migrar USER:', error.message);
+            }
+          }
+
+          // Migrar TENANT a ARRENDATARIO
+          if (existingValues.has('TENANT')) {
+            try {
+              await condominioPrisma.$executeRawUnsafe(`
+                UPDATE "user" SET role = 'ARRENDATARIO'::"UserRole" WHERE role = 'TENANT'::"UserRole"
+              `);
+              console.log('✅ Migrados usuarios con rol TENANT a ARRENDATARIO');
+            } catch (error: any) {
+              console.warn('Advertencia al migrar TENANT:', error.message);
+            }
+          }
+        }
+
+        console.log('✅ Enum UserRole actualizado correctamente');
+      }
+
+      this.enumChecked.add(cacheKey);
+    } catch (error: any) {
+      // Si falla la verificación, intentar agregar valores directamente
+      console.warn('Error verificando enum, intentando agregar valores directamente:', error.message);
+      
+      const valuesToAdd = ['PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'];
+      for (const value of valuesToAdd) {
+        try {
+          await condominioPrisma.$executeRawUnsafe(
+            `ALTER TYPE "UserRole" ADD VALUE '${value}'`,
+          );
+        } catch (addError: any) {
+          // Ignorar si ya existe
+          if (
+            addError.message?.includes('already exists') ||
+            addError.message?.includes('duplicate') ||
+            addError.code === '42710'
+          ) {
+            // Valor ya existe, continuar
+          } else {
+            console.warn(`No se pudo agregar ${value} al enum:`, addError.message);
+          }
+        }
+      }
+      
+      this.enumChecked.add(cacheKey);
+    }
+  }
+
+  /**
+   * Asegura que las columnas nuevas existan en la tabla user (optimizado)
+   */
+  private async ensureUserColumnsExist(condominioPrisma: any) {
+    // Usar la URL de conexión como clave única para el cache
+    const cacheKey = (condominioPrisma as any)._connectionUrl || 'default';
+    
+    // Si ya verificamos estas columnas para esta BD, saltar
+    if (this.columnsChecked.has(cacheKey)) {
+      return;
+    }
+
+    const columnsToAdd = [
+      { name: 'firstName', type: 'STRING' },
+      { name: 'lastName', type: 'STRING' },
+      { name: 'tipoDocumento', type: 'STRING' },
+      { name: 'numeroDocumento', type: 'STRING' },
+      { name: 'telefono', type: 'STRING' },
+      { name: 'unidadId', type: 'STRING' },
+    ];
+
+    try {
+      // Verificar todas las columnas existentes de una vez
+      const existingColumns = (await condominioPrisma.$queryRawUnsafe(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'user'
+      `)) as any[];
+
+      const existingColumnNames = new Set(
+        existingColumns.map((col: any) => col.column_name.toLowerCase()),
+      );
+
+      // Crear todas las columnas faltantes en una sola transacción
+      const columnsToCreate = columnsToAdd.filter(
+        (col) => !existingColumnNames.has(col.name.toLowerCase()),
+      );
+
+      if (columnsToCreate.length > 0) {
+        // Crear todas las columnas faltantes (CockroachDB no soporta IF NOT EXISTS en ALTER TABLE)
+        for (const col of columnsToCreate) {
+          try {
+            await condominioPrisma.$executeRawUnsafe(
+              `ALTER TABLE "user" ADD COLUMN "${col.name}" ${col.type}`,
+            );
+            console.log(`✅ Columna ${col.name} agregada`);
+          } catch (alterError: any) {
+            // Ignorar si ya existe (puede pasar si otra request la creó simultáneamente)
+            if (
+              alterError.message?.includes('already exists') ||
+              alterError.code === '42701' ||
+              alterError.message?.includes('duplicate column')
+            ) {
+              // Columna ya existe, continuar
+            } else {
+              console.warn(`Advertencia al agregar columna ${col.name}:`, alterError.message);
+            }
+          }
+        }
+      }
+
+      // Crear índices si no existen (solo una vez)
+      try {
+        await condominioPrisma.$executeRawUnsafe(
+          `CREATE UNIQUE INDEX IF NOT EXISTS "user_numeroDocumento_key" ON "user" ("numeroDocumento") WHERE "numeroDocumento" IS NOT NULL`,
+        );
+      } catch (error: any) {
+        // Ignorar si ya existe
+      }
+
+      try {
+        await condominioPrisma.$executeRawUnsafe(
+          `CREATE INDEX IF NOT EXISTS "user_unidadId_idx" ON "user" ("unidadId")`,
+        );
+      } catch (error: any) {
+        // Ignorar si ya existe
+      }
+
+      // Marcar como verificado para esta BD
+      this.columnsChecked.add(cacheKey);
+    } catch (error: any) {
+      // Si falla la verificación optimizada, usar método fallback
+      console.warn('Error en verificación optimizada, usando método fallback:', error.message);
+      
+      // Método fallback: verificar columna por columna solo si es necesario
+      for (const column of columnsToAdd) {
+        try {
+          await condominioPrisma.$executeRawUnsafe(
+            `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "${column.name}" ${column.type}`,
+          );
+        } catch (alterError: any) {
+          // Ignorar errores de columna ya existente
+          if (!alterError.message?.includes('already exists') && alterError.code !== '42701') {
+            console.warn(`Advertencia al agregar columna ${column.name}:`, alterError.message);
+          }
+        }
+      }
+      
+      this.columnsChecked.add(cacheKey);
+    }
   }
 
   /**
