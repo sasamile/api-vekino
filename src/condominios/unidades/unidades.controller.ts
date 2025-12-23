@@ -21,17 +21,17 @@ import {
   ApiBearerAuth,
   ApiCookieAuth,
 } from '@nestjs/swagger';
-import { UnidadesService } from './unidades.service';
-import { CreateUnidadDto } from './dto/create-unidad.dto';
-import { UpdateUnidadDto } from './dto/update-unidad.dto';
-import { BulkUploadUnidadesDto } from './dto/bulk-upload-unidades.dto';
+import { CreateUnidadDto } from '../dto/create-unidad.dto';
+import { UpdateUnidadDto } from '../dto/update-unidad.dto';
+import { BulkUploadUnidadesDto } from '../dto/bulk-upload-unidades.dto';
 import {
   RequireRole,
   RequireCondominioAccess,
   RoleGuard,
-} from '../guards/require-role.guard';
-import { Subdomain } from '../decorators/subdomain.decorator';
-import { CondominiosService } from './condominios.service';
+} from '../../guards/require-role.guard';
+import { Subdomain } from '../../decorators/subdomain.decorator';
+import { CondominiosService } from '../condominios.service';
+import { UnidadesService } from './unidades.service';
 
 @ApiTags('unidades')
 @Controller('unidades')
@@ -50,9 +50,8 @@ export class UnidadesController {
     if (!subdomain) {
       throw new BadRequestException('Subdominio no detectado');
     }
-    const condominio = await this.condominiosService.findCondominioBySubdomain(
-      subdomain,
-    );
+    const condominio =
+      await this.condominiosService.findCondominioBySubdomain(subdomain);
     return condominio.id;
   }
 
@@ -351,7 +350,8 @@ curl --location --request DELETE 'http://condominio-las-flores.localhost:3000/un
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cargar múltiples unidades',
-    description: 'Crea múltiples unidades en el condominio mediante carga masiva',
+    description:
+      'Crea múltiples unidades en el condominio mediante carga masiva',
   })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
@@ -371,4 +371,3 @@ curl --location --request DELETE 'http://condominio-las-flores.localhost:3000/un
     return this.unidadesService.bulkUploadUnidades(condominioId, bulkUploadDto);
   }
 }
-

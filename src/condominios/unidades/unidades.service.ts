@@ -5,11 +5,11 @@ import {
   Inject,
 } from '@nestjs/common';
 import { PrismaClient } from 'generated/prisma/client';
-import { CondominiosService } from './condominios.service';
-import { CreateUnidadDto } from './dto/create-unidad.dto';
-import { UpdateUnidadDto } from './dto/update-unidad.dto';
-import { BulkUploadUnidadesDto } from './dto/bulk-upload-unidades.dto';
-import { DatabaseManagerService } from '../config/database-manager.service';
+import { CondominiosService } from '../condominios.service';
+import { CreateUnidadDto } from '../dto/create-unidad.dto';
+import { UpdateUnidadDto } from '../dto/update-unidad.dto';
+import { BulkUploadUnidadesDto } from '../dto/bulk-upload-unidades.dto';
+import { DatabaseManagerService } from '../../config/database-manager.service';
 
 @Injectable()
 export class UnidadesService {

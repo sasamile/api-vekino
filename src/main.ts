@@ -31,8 +31,32 @@ async function bootstrap() {
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
 
   // Si tendrás frontend separado, habilita CORS con credentials:
+  // Permitir cualquier subdominio de localhost para desarrollo
   app.enableCors({
-    origin: ["http://localhost:5173", "http://localhost:3000"],
+    origin: (origin, callback) => {
+      // Permitir requests sin origin (Postman, curl, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // Permitir localhost y cualquier subdominio de localhost
+      // Incluir tanto api-* como subdominios normales
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        /^http:\/\/.*\.localhost:\d+$/, // Cualquier subdominio de localhost (api-*, condominio-*, etc.)
+      ];
+      
+      const isAllowed = allowedOrigins.some(allowed => {
+        if (typeof allowed === 'string') {
+          return origin === allowed;
+        }
+        return allowed.test(origin);
+      });
+      
+      callback(null, isAllowed);
+    },
     credentials: true,
   });
 

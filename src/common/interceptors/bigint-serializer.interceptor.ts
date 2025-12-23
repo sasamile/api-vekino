@@ -24,7 +24,7 @@ export class BigIntSerializerInterceptor implements NestInterceptor {
    * - BigInt -> Number
    * - Date -> ISO string
    */
-  private transformBigInt(obj: any): any {
+  private transformBigInt(obj: any, visited: WeakSet<object> = new WeakSet()): any {
     if (obj === null || obj === undefined) {
       return obj;
     }
@@ -41,12 +41,19 @@ export class BigIntSerializerInterceptor implements NestInterceptor {
 
     // Si es un array, transformar cada elemento
     if (Array.isArray(obj)) {
-      return obj.map((item) => this.transformBigInt(item));
+      return obj.map((item) => this.transformBigInt(item, visited));
     }
 
-    // Si es un objeto, verificar si es un objeto Date de CockroachDB/PostgreSQL
-    // Estos objetos tienen propiedades como year, month, day, etc.
+    // Si es un objeto, verificar si ya lo hemos visitado (evitar referencias circulares)
     if (typeof obj === 'object') {
+      // Verificar si ya visitamos este objeto (protección contra referencias circulares)
+      if (visited.has(obj)) {
+        return '[Circular]';
+      }
+
+      // Agregar el objeto al conjunto de visitados
+      visited.add(obj);
+
       // Verificar si es un objeto Timestamp de CockroachDB/PostgreSQL
       // Estos objetos suelen tener propiedades como 'getTime' o métodos de fecha
       if (obj.constructor && obj.constructor.name === 'Date') {
@@ -70,7 +77,7 @@ export class BigIntSerializerInterceptor implements NestInterceptor {
       const transformed: any = {};
       for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-          transformed[key] = this.transformBigInt(obj[key]);
+          transformed[key] = this.transformBigInt(obj[key], visited);
         }
       }
       return transformed;

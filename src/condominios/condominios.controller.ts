@@ -938,42 +938,319 @@ curl --location 'http://condominio-las-flores.localhost:3000/condominios/login' 
     );
     
     // Establecer la cookie usando res.cookie() de Express
-    // NO establecemos el atributo Domain para que la cookie use automáticamente
-    // el dominio del request (condominio-las-flores.localhost)
+    // IMPORTANTE: Si el frontend está en un dominio diferente (ej: localhost:3001),
+    // necesitamos configurar la cookie de manera especial
+    
     if (result.data?.session?.token) {
       const host = req.headers.host || req.hostname;
       const hostWithoutPort = host?.split(':')[0] || '';
+      const origin = req.headers.origin;
       
-      console.log('Estableciendo cookie - Host recibido:', host, 'Host sin puerto:', hostWithoutPort);
+      console.log('Estableciendo cookie - Host recibido:', host, 'Origin:', origin);
       
-      // Para subdominios, NO establecer Domain - dejar que el navegador use el dominio del request
-      // Esto hace que la cookie funcione solo en ese subdominio específico
-      // Si queremos que funcione en todos los subdominios, usaríamos Domain=.localhost
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      // Detectar si el request viene de un dominio diferente (cross-origin)
+      const isCrossOrigin = origin && !origin.includes(hostWithoutPort);
+      
+      // Configuración de cookie optimizada para evitar advertencias del navegador
+      // Validar que expiresAt sea una fecha válida
+      let expiresDate: Date;
+      try {
+        expiresDate = new Date(result.data.session.expiresAt);
+        if (isNaN(expiresDate.getTime())) {
+          // Si la fecha no es válida, usar 30 días desde ahora
+          expiresDate = new Date();
+          expiresDate.setDate(expiresDate.getDate() + 30);
+          console.warn('Fecha de expiración inválida, usando 30 días desde ahora');
+        }
+        // Verificar que la fecha no sea en el pasado
+        if (expiresDate.getTime() < Date.now()) {
+          expiresDate = new Date();
+          expiresDate.setDate(expiresDate.getDate() + 30);
+          console.warn('Fecha de expiración en el pasado, usando 30 días desde ahora');
+        }
+      } catch (e) {
+        // Si hay error, usar 30 días desde ahora
+        expiresDate = new Date();
+        expiresDate.setDate(expiresDate.getDate() + 30);
+        console.warn('Error al parsear fecha de expiración, usando 30 días desde ahora');
+      }
+      
+      console.log('Fecha de expiración de la cookie:', expiresDate.toISOString());
+      
+      // Calcular maxAge en milisegundos (convertir a segundos para la cookie)
+      const maxAgeSeconds = Math.floor((expiresDate.getTime() - Date.now()) / 1000);
+      
+      // Detectar si el frontend y backend están en subdominios diferentes de .localhost
+      const originHost = origin ? new URL(origin).hostname.split(':')[0] : null;
+      
+      // Limpiar y normalizar dominios (remover doble .localhost.localhost si existe)
+      const cleanOriginHost = originHost ? originHost.replace(/\.localhost\.localhost$/g, '.localhost') : null;
+      const normalizedBackendHost = hostWithoutPort.replace(/\.localhost\.localhost$/g, '.localhost');
+      
+      // Detectar si están en el MISMO dominio exacto (solo diferente puerto)
+      const isExactSameDomain = cleanOriginHost && cleanOriginHost === normalizedBackendHost;
+      
+      // Detectar si están en subdominios del mismo dominio base (para producción)
+      // Ejemplo: api.eduamidsoft.com y app.eduamidsoft.com comparten .eduamidsoft.com
+      const backendDomainParts = normalizedBackendHost.split('.');
+      const frontendDomainParts = cleanOriginHost ? cleanOriginHost.split('.') : [];
+      const isSameDomainBase = isProduction && 
+                               backendDomainParts.length >= 2 && 
+                               frontendDomainParts.length >= 2 &&
+                               backendDomainParts.slice(-2).join('.') === frontendDomainParts.slice(-2).join('.') &&
+                               normalizedBackendHost !== cleanOriginHost;
+      
+      const isBothSubdomains = cleanOriginHost && 
+                               normalizedBackendHost.includes('.localhost') && 
+                               cleanOriginHost.includes('.localhost') &&
+                               cleanOriginHost !== normalizedBackendHost &&
+                               !isExactSameDomain;
+      
       const cookieOptions: any = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const,
-        expires: new Date(result.data.session.expiresAt),
+        secure: false, // En desarrollo, no usar secure (requiere HTTPS)
+        expires: expiresDate,
+        maxAge: maxAgeSeconds,
         path: '/',
-        // NO establecer domain - el navegador usará automáticamente el dominio del request
-        // Esto hace que la cookie funcione solo en condominio-las-flores.localhost
       };
       
-      // Solo para producción con múltiples subdominios, establecer Domain
-      // En desarrollo, no establecer Domain para que funcione en el subdominio específico
-      if (process.env.NODE_ENV === 'production' && hostWithoutPort.includes('.') && !hostWithoutPort.includes('.localhost')) {
-        const parts = hostWithoutPort.split('.');
-        if (parts.length > 2) {
-          cookieOptions.domain = '.' + parts.slice(-2).join('.');
-          console.log('Dominio establecido para producción:', cookieOptions.domain);
+      // Configurar sameSite según el contexto
+      if (isProduction) {
+        cookieOptions.secure = true; // En producción siempre usar secure (HTTPS)
+        if (isExactSameDomain || isSameDomainBase) {
+          // Mismo dominio o mismo dominio base - usar 'lax' (mejor para cookies compartidas)
+          cookieOptions.sameSite = 'lax';
+          console.log('✅ Producción: Mismo dominio base detectado');
+          console.log('   Backend:', normalizedBackendHost);
+          console.log('   Frontend:', cleanOriginHost);
+          console.log('   ✅ Usando SameSite=Lax para compartir cookies entre subdominios');
+        } else {
+          // Cross-origin en producción - usar 'none' con 'secure'
+          cookieOptions.sameSite = isCrossOrigin ? 'none' : 'lax';
+        }
+      } else {
+        // En desarrollo
+        cookieOptions.sameSite = 'lax';
+        if (isExactSameDomain) {
+          console.log('✅ PERFECTO: Frontend y backend en el mismo dominio exacto');
+          console.log('   Backend:', normalizedBackendHost + ':3000');
+          console.log('   Frontend:', cleanOriginHost + ':3001');
+          console.log('   ✅ Las cookies funcionarán correctamente y persistirán después de actualizar');
+        } else if (isBothSubdomains) {
+          console.log('⚠️  Subdominios diferentes detectados');
+          console.log('   Backend:', normalizedBackendHost);
+          console.log('   Frontend:', cleanOriginHost);
+          if (originHost && originHost.includes('.localhost.localhost')) {
+            console.log('   ⚠️  ERROR: El frontend tiene doble .localhost.localhost');
+            console.log('   📋 CORRIGE: El frontend debe usar:', normalizedBackendHost);
+          }
+          console.log('   ⚠️  Las cookies NO funcionarán entre subdominios diferentes en desarrollo');
+          console.log('   📋 SOLUCIÓN: Usa el mismo dominio exacto para frontend y backend');
         }
       }
       
-      res.cookie('better-auth.session_token', result.data.session.token, cookieOptions);
+      // Configurar domain para compartir cookies entre subdominios
+      // IMPORTANTE: 
+      // - En desarrollo: Chrome rechaza cookies con Domain=.localhost, NO establecer domain
+      // - En producción: Establecer domain para compartir entre subdominios del mismo dominio base
+      //   Ejemplo: api.eduamidsoft.com y app.eduamidsoft.com comparten cookies con domain=.eduamidsoft.com
+      if (isProduction && normalizedBackendHost.includes('.')) {
+        if (isSameDomainBase) {
+          // Compartir cookies entre subdominios del mismo dominio base
+          const parts = normalizedBackendHost.split('.');
+          if (parts.length >= 2) {
+            // Usar los últimos dos segmentos (ej: .eduamidsoft.com)
+            cookieOptions.domain = '.' + parts.slice(-2).join('.');
+            console.log('✅ Producción: Dominio establecido para compartir cookies:', cookieOptions.domain);
+            console.log('   Esto permite compartir cookies entre subdominios del mismo dominio base');
+            console.log('   Ejemplo: api.eduamidsoft.com ↔ app.eduamidsoft.com');
+            console.log('   Ejemplo: api-condominio.eduamidsoft.com ↔ condominio.eduamidsoft.com');
+          }
+        } else if (isExactSameDomain) {
+          // Mismo dominio exacto en producción - no establecer domain (funcionará automáticamente)
+          console.log('✅ Producción: Mismo dominio exacto - no se necesita domain');
+        }
+      } else if (normalizedBackendHost.includes('.localhost') && !normalizedBackendHost.startsWith('localhost')) {
+        // En desarrollo con .localhost
+        if (isExactSameDomain) {
+          console.log('✅ Desarrollo: Mismo dominio exacto detectado');
+          console.log('   Backend:', normalizedBackendHost + ':3000');
+          console.log('   Frontend:', cleanOriginHost + ':3001');
+          console.log('   ✅ Las cookies funcionarán correctamente y persistirán');
+          console.log('   ✅ No se necesita configurar domain - mismo dominio, diferente puerto');
+          // NO establecer domain - no es necesario y Chrome lo rechazaría
+        } else {
+          console.log('⚠️  Desarrollo: NO estableciendo domain para evitar rechazo de Chrome');
+          console.log('   Chrome rechaza cookies con Domain=.localhost');
+          console.log('   La cookie será específica de:', normalizedBackendHost);
+          console.log('   📋 SOLUCIÓN: El frontend debe usar el mismo dominio exacto que el backend');
+          console.log('   Ejemplo: Si el backend es condominio-las-flores.localhost:3000,');
+          console.log('            el frontend debe ser condominio-las-flores.localhost:3001');
+          console.log('   💡 Alternativa: Configurar un proxy en el frontend');
+          // NO establecer domain
+        }
+      } else if (normalizedBackendHost === 'localhost') {
+        console.log('ℹ️  localhost detectado (sin subdominio)');
+        console.log('   La cookie solo funcionará en localhost');
+      } else {
+        console.log('ℹ️  No se estableció domain - cookie solo funcionará en:', normalizedBackendHost);
+      }
       
-      console.log('Cookie establecida - dominio del request:', hostWithoutPort, 'opciones:', JSON.stringify(cookieOptions));
+      // Establecer la cookie ANTES de enviar la respuesta
+      // Construir el header Set-Cookie manualmente para tener control total
+      try {
+        // Construir el valor de la cookie manualmente
+        const cookieValue = result.data.session.token;
+        
+        // Construir las partes del header Set-Cookie
+        const cookieParts: string[] = [
+          `better-auth.session_token=${cookieValue}`,
+          `Path=${cookieOptions.path}`,
+        ];
+        
+        // Agregar Max-Age (en segundos)
+        if (cookieOptions.maxAge) {
+          cookieParts.push(`Max-Age=${cookieOptions.maxAge}`);
+        }
+        
+        // Agregar Expires (formato RFC 1123)
+        if (cookieOptions.expires) {
+          cookieParts.push(`Expires=${expiresDate.toUTCString()}`);
+        }
+        
+        // Agregar Domain si está definido
+        if (cookieOptions.domain) {
+          cookieParts.push(`Domain=${cookieOptions.domain}`);
+        }
+        
+        // Agregar HttpOnly
+        if (cookieOptions.httpOnly) {
+          cookieParts.push('HttpOnly');
+        }
+        
+        // Agregar Secure
+        if (cookieOptions.secure) {
+          cookieParts.push('Secure');
+        }
+        
+        // Agregar SameSite
+        if (cookieOptions.sameSite) {
+          cookieParts.push(`SameSite=${cookieOptions.sameSite.charAt(0).toUpperCase() + cookieOptions.sameSite.slice(1)}`);
+        }
+        
+        // Construir el header completo
+        const setCookieHeader = cookieParts.join('; ');
+        
+        // Establecer el header directamente
+        res.setHeader('Set-Cookie', setCookieHeader);
+        
+        console.log('✅ Cookie establecida exitosamente (usando setHeader manual)');
+        console.log('   Nombre: better-auth.session_token');
+        console.log('   Valor:', cookieValue.substring(0, 50) + '...');
+        console.log('   Dominio del request:', normalizedBackendHost);
+        console.log('   Origin del frontend:', origin || 'no especificado');
+        if (isExactSameDomain) {
+          console.log('   ✅ ESTADO: Cookie configurada correctamente para mismo dominio');
+          console.log('   ✅ Las cookies se almacenarán y persistirán después de actualizar');
+        }
+        console.log('   Header Set-Cookie completo:', setCookieHeader.substring(0, 200) + '...');
+        
+        // Verificar que la cookie se estableció en los headers
+        const verifyHeader = res.getHeader('Set-Cookie');
+        if (verifyHeader) {
+          console.log('✅ Header Set-Cookie verificado en la respuesta');
+          if (Array.isArray(verifyHeader)) {
+            console.log('   Set-Cookie header (verificado):', verifyHeader[0].substring(0, 200) + '...');
+          } else {
+            console.log('   Set-Cookie header (verificado):', String(verifyHeader).substring(0, 200) + '...');
+          }
+        } else {
+          console.error('❌ ERROR: Header Set-Cookie NO encontrado después de establecerlo');
+        }
+        
+        // Información adicional para debugging
+        console.log('📋 Información de la cookie:');
+        console.log('   - Expira en:', expiresDate.toISOString());
+        console.log('   - Tiempo restante:', Math.floor(maxAgeSeconds / 86400), 'días');
+        console.log('   - httpOnly:', cookieOptions.httpOnly);
+        console.log('   - secure:', cookieOptions.secure);
+        console.log('   - sameSite:', cookieOptions.sameSite);
+        console.log('   - domain:', cookieOptions.domain || '(no establecido - específico del host)');
+        console.log('   - path:', cookieOptions.path);
+        console.log('   - maxAge:', cookieOptions.maxAge, 'segundos');
+        
+        if (isExactSameDomain) {
+          console.log('✅ PERFECTO: Frontend y backend en el mismo dominio exacto');
+          console.log('   ✅ Las cookies se almacenarán correctamente en el navegador');
+          console.log('   ✅ Las cookies se enviarán automáticamente en cada request');
+          console.log('   ✅ Las cookies persistirán después de actualizar la página');
+          console.log('   ✅ No hay advertencias de Chrome - configuración ideal');
+        } else if (isBothSubdomains && !isProduction) {
+          console.log('ℹ️  Desarrollo: Frontend y backend en subdominios diferentes de .localhost');
+          console.log('   ⚠️  IMPORTANTE: La cookie NO se compartirá automáticamente en desarrollo');
+          console.log('   📋 SOLUCIÓN RECOMENDADA: Usar el mismo dominio exacto para frontend y backend');
+          console.log('   Ejemplo: Backend: condominio-las-flores.localhost:3000');
+          console.log('            Frontend: condominio-las-flores.localhost:3001 (mismo dominio, diferente puerto)');
+          console.log('   💡 Alternativa: Configurar proxy en el frontend');
+          console.log('      server: { proxy: { "/api": "http://condominio-las-flores.localhost:3000" } }');
+        } else if (isSameDomainBase && isProduction) {
+          console.log('✅ Producción: Frontend y backend en subdominios del mismo dominio base');
+          console.log('   La cookie se compartirá automáticamente gracias a domain=' + cookieOptions.domain);
+          console.log('   Ejemplo: api.eduamidsoft.com ↔ app.eduamidsoft.com');
+        }
+      } catch (error) {
+        console.error('❌ ERROR al establecer cookie:', error);
+        // Fallback: intentar con res.cookie() si setHeader falla
+        try {
+          console.log('⚠️  Intentando fallback con res.cookie()...');
+      res.cookie('better-auth.session_token', result.data.session.token, cookieOptions);
+          console.log('✅ Cookie establecida con res.cookie() como fallback');
+        } catch (fallbackError) {
+          console.error('❌ ERROR también en fallback:', fallbackError);
+        }
+      }
+      
+      // Advertencia si el request viene de un dominio diferente
+      if (isCrossOrigin) {
+        const originHost = origin ? new URL(origin).hostname : 'desconocido';
+        const isOriginLocalhost = originHost === 'localhost';
+        const isBackendSubdomain = hostWithoutPort.includes('.localhost');
+        
+        if (isOriginLocalhost && isBackendSubdomain) {
+          console.warn('⚠️  ADVERTENCIA: Request cross-origin entre localhost y *.localhost');
+          console.warn('   Frontend:', origin);
+          console.warn('   Backend:', host);
+          console.warn('   ❌ Las cookies NO funcionarán entre localhost y *.localhost');
+          console.warn('   ℹ️  En desarrollo: El frontend también debe usar un subdominio (ej: condominio-las-flores.localhost:3001)');
+          console.warn('   ℹ️  En producción: Ambos usarán el mismo dominio base y funcionará correctamente');
+        } else if (isBothSubdomains && !isProduction) {
+          console.warn('⚠️  ADVERTENCIA: Request cross-origin entre subdominios .localhost (desarrollo)');
+          console.warn('   Frontend:', origin);
+          console.warn('   Backend:', host);
+          console.warn('   ⚠️  Chrome rechaza cookies con Domain=.localhost');
+          console.warn('   📋 La cookie se establece sin domain, solo funcionará en el dominio exacto del backend');
+          console.warn('   💡 SOLUCIÓN: Usa el mismo subdominio para frontend y backend en desarrollo');
+          console.warn('   Ejemplo: condominio-las-flores.localhost:3000 (backend)');
+          console.warn('            condominio-las-flores.localhost:3001 (frontend)');
+        } else if (isBothSubdomains && isProduction) {
+          console.log('✅ Producción: Request cross-origin entre subdominios del mismo dominio base');
+          console.log('   Frontend:', origin);
+          console.log('   Backend:', host);
+          console.log('   ✅ La cookie se compartirá gracias a domain=' + cookieOptions.domain);
+        } else {
+          console.warn('⚠️  ADVERTENCIA: Request cross-origin detectado');
+          console.warn('   Frontend:', origin);
+          console.warn('   Backend:', host);
+        }
+      }
+    } else {
+      console.error('❌ ERROR: No se encontró token de sesión en result.data.session.token');
+      console.log('Result data:', JSON.stringify(result.data, null, 2));
     }
     
+    // IMPORTANTE: Enviar la respuesta DESPUÉS de establecer la cookie
     return res.json(result.data || result);
   }
 

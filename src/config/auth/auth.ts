@@ -18,6 +18,8 @@ export const auth = betterAuth({
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "http://localhost:3000",
     "http://localhost:5173",
+    // Agregar todos los orígenes confiables (se pueden agregar más según necesidad)
+    ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(',') : []),
   ],
   user: {
     additionalFields: {
