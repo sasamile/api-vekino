@@ -1,0 +1,164 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "cockroachdb"
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+  USER
+  TENANT
+}
+
+enum SubscriptionPlan {
+  BASICO
+  PRO
+  ENTERPRISE
+}
+
+enum Timezone {
+  AMERICA_BOGOTA
+  AMERICA_MEXICO_CITY
+  AMERICA_LIMA
+  AMERICA_SANTIAGO
+  AMERICA_BUENOS_AIRES
+  AMERICA_CARACAS
+  AMERICA_MONTEVIDEO
+  AMERICA_ASUNCION
+  AMERICA_LA_PAZ
+  AMERICA_QUITO
+  AMERICA_GUAYAQUIL
+  AMERICA_PANAMA
+  AMERICA_MANAGUA
+  AMERICA_SAN_JOSE
+  AMERICA_TEGUCIGALPA
+  AMERICA_GUATEMALA
+  AMERICA_SANTO_DOMINGO
+  AMERICA_HAVANA
+  UTC
+}
+
+model Condominio {
+  id              String   @id @default(uuid())
+  name            String
+  subdomain       String?  // Subdominio único para acceso (ej: condominio1)
+  databaseUrl     String   // URL de conexión a la base de datos específica del condominio
+  databaseName    String   // Nombre de la base de datos
+  
+  // Información Institucional
+  nit             String?  // NIT / Identificación Tributaria
+  address         String?  // Dirección física
+  city            String?  // Ciudad
+  country         String?  // País
+  timezone        Timezone? @default(AMERICA_BOGOTA) // Zona horaria
+  
+  // Configuración de Acceso y Dominio
+  logo            String?  // URL del logo del conjunto
+  primaryColor    String?  @default("#3B82F6") // Color principal (hex)
+  
+  // Límites y Plan
+  subscriptionPlan SubscriptionPlan? @default(BASICO)
+  unitLimit       Int?     // Límite de unidades
+  planExpiresAt   DateTime? // Fecha de vencimiento del plan
+  
+  // Módulos Activos (JSON para almacenar array de módulos)
+  activeModules   String?  // JSON: ["reservas", "documentos", "pqrs"]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isActive        Boolean  @default(true)
+  
+  // Relación con usuarios del condominio (en la BD maestra)
+  users           User[]
+
+  @@unique([databaseName])
+  @@unique([subdomain])
+  @@index([name])
+  @@index([subdomain])
+  @@index([isActive])
+  @@map("condominio")
+}
+
+model User {
+  id            String     @id
+  name          String
+  email         String
+  emailVerified Boolean    @default(false)
+  image         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  role          UserRole   @default(USER)
+  sessions      Session[]
+  accounts      Account[]
+  // Relación con condominio (null para superadmin)
+  condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id], onDelete: SetNull)
+  // Relación para arrendatarios: un usuario (dueño) puede tener múltiples arrendatarios
+  tenants       User[]     @relation("OwnerTenants")
+  // Relación para el dueño: un arrendatario pertenece a un dueño
+  ownerId       String?
+  owner         User?      @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([email])
+  @@index([ownerId])
+  @@index([condominioId])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}

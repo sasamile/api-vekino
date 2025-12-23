@@ -1,0 +1,86 @@
+// Schema para las bases de datos de cada condominio
+// Este schema se aplicará a cada base de datos de condominio
+// NOTA: Este schema se usa solo para db push, no genera cliente
+// El cliente se genera desde schema.prisma principal
+// La URL de conexión se pasa como parámetro: --url="..."
+
+datasource condominio_db {
+  provider = "cockroachdb"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  TENANT
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  role          UserRole  @default(USER)
+  sessions      Session[]
+  accounts      Account[]
+  // Relación para arrendatarios: un usuario (dueño) puede tener múltiples arrendatarios
+  tenants       User[]    @relation("OwnerTenants")
+  // Relación para el dueño: un arrendatario pertenece a un dueño
+  ownerId       String?
+  owner         User?     @relation("OwnerTenants", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([email])
+  @@index([ownerId])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
