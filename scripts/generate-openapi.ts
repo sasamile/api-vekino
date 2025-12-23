@@ -38,8 +38,8 @@ async function generateOpenApiSpec() {
       name: "better-auth.session_token",
       description: "Cookie de sesión de Better Auth",
     })
-    .addServer("http://localhost:3000", "Servidor de desarrollo")
-    .addServer("https://api.vekino.com", "Servidor de producción")
+    .addServer("https://d043cd4b26e9.ngrok-free.app ", "Servidor de desarrollo")
+    .addServer("https://d043cd4b26e9.ngrok-free.app ", "Servidor de producción")
     .addTag("auth", "Endpoints de autenticación")
     .addTag("condominios", "Gestión de condominios")
     .addTag("unidades", "Gestión de unidades")

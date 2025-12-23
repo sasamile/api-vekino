@@ -794,11 +794,11 @@
   ],
   "servers": [
     {
-      "url": "http://localhost:3000",
+      "url": "https://d043cd4b26e9.ngrok-free.app ",
       "description": "Servidor de desarrollo"
     },
     {
-      "url": "https://api.vekino.com",
+      "url": "https://d043cd4b26e9.ngrok-free.app ",
       "description": "Servidor de producción"
     }
   ],
