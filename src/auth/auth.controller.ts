@@ -18,6 +18,7 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterSuperadminDto } from './dto/superadmin/register-superadmin.dto';
 import { LoginSuperadminDto } from './dto/superadmin/login-superadmin.dto';
+import { AuthResponseDto } from './dto/auth-response.dto';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 
 @ApiTags('auth')
@@ -36,24 +37,30 @@ export class AuthController {
   @ApiResponse({
     status: 201,
     description: 'Superadministrador registrado exitosamente',
-    schema: {
-      example: {
-        user: {
-          id: 'uuid',
-          email: 'admin@vekino.com',
-          name: 'Juan Pérez',
-          role: 'SUPERADMIN',
-        },
-        session: {
-          token: 'session_token',
-          expiresAt: '2024-12-31T23:59:59.000Z',
-        },
+    type: AuthResponseDto,
+    example: {
+      user: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        email: 'admin@vekino.com',
+        name: 'Juan Pérez',
+        role: 'SUPERADMIN',
+      },
+      session: {
+        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        expiresAt: '2024-12-31T23:59:59.000Z',
       },
     },
   })
   @ApiResponse({
     status: 400,
     description: 'Datos de registro inválidos',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['email debe ser un correo electrónico válido', 'password debe tener al menos 8 caracteres'],
+        error: 'Bad Request',
+      },
+    },
   })
   async register(
     @Body() dto: RegisterSuperadminDto,
@@ -75,24 +82,30 @@ export class AuthController {
   @ApiResponse({
     status: 200,
     description: 'Inicio de sesión exitoso',
-    schema: {
-      example: {
-        user: {
-          id: 'uuid',
-          email: 'admin@vekino.com',
-          name: 'Juan Pérez',
-          role: 'SUPERADMIN',
-        },
-        session: {
-          token: 'session_token',
-          expiresAt: '2024-12-31T23:59:59.000Z',
-        },
+    type: AuthResponseDto,
+    example: {
+      user: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        email: 'admin@vekino.com',
+        name: 'Juan Pérez',
+        role: 'SUPERADMIN',
+      },
+      session: {
+        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        expiresAt: '2024-12-31T23:59:59.000Z',
       },
     },
   })
   @ApiResponse({
     status: 401,
     description: 'Credenciales inválidas',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Credenciales inválidas',
+        error: 'Unauthorized',
+      },
+    },
   })
   async login(
     @Body() dto: LoginSuperadminDto,

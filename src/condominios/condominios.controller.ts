@@ -40,6 +40,8 @@ import { UpdateCondominioDto } from './dto/update-condominio.dto';
 import { CreateCondominioUserDto } from './dto/create-condominio-user.dto';
 import { UpdateCondominioUserDto } from './dto/update-condominio-user.dto';
 import { LoginCondominioUserDto } from './dto/login-condominio-user.dto';
+import { CondominioResponseDto, CondominioListResponseDto } from './dto/condominio-response.dto';
+import { CondominioUserResponseDto, CondominioUserListResponseDto, LoginResponseDto } from './dto/condominio-user-response.dto';
 import {
   RequireRole,
   RequireCondominioAccess,
@@ -73,14 +75,43 @@ export class CondominiosController {
   @ApiResponse({
     status: 201,
     description: 'Condominio creado exitosamente',
+    type: CondominioResponseDto,
+    example: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      name: 'Condominio Las Flores',
+      nit: '900123456-7',
+      address: 'Calle 123 #45-67',
+      city: 'Bogotá',
+      country: 'Colombia',
+      frontSubdomain: 'las-flores',
+      subdomain: 'condominio1',
+      logo: 'https://example.com/logo.png',
+      primaryColor: '#3B82F6',
+      createdAt: '2024-01-15T10:30:00.000Z',
+      updatedAt: '2024-01-15T10:30:00.000Z',
+    },
   })
   @ApiResponse({
     status: 400,
     description: 'Datos inválidos',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['name debe ser una cadena de texto', 'name no debe estar vacío'],
+        error: 'Bad Request',
+      },
+    },
   })
   @ApiResponse({
     status: 403,
     description: 'No autorizado - Se requiere rol SUPERADMIN',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para realizar esta acción',
+        error: 'Forbidden',
+      },
+    },
   })
   async create(
     @Body() createCondominioDto: CreateCondominioDto,
@@ -101,11 +132,28 @@ export class CondominiosController {
   @Get()
   @ApiOperation({
     summary: 'Obtener todos los condominios',
-    description: 'Retorna una lista de todos los condominios registrados',
+    description: 'Retorna una lista de todos los condominios registrados en el sistema',
   })
   @ApiResponse({
     status: 200,
     description: 'Lista de condominios obtenida exitosamente',
+    type: [CondominioResponseDto],
+    example: [
+      {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Condominio Las Flores',
+        nit: '900123456-7',
+        address: 'Calle 123 #45-67',
+        city: 'Bogotá',
+        country: 'Colombia',
+        frontSubdomain: 'las-flores',
+        subdomain: 'condominio1',
+        logo: 'https://example.com/logo.png',
+        primaryColor: '#3B82F6',
+        createdAt: '2024-01-15T10:30:00.000Z',
+        updatedAt: '2024-01-15T10:30:00.000Z',
+      },
+    ],
   })
   async findAll() {
     return this.condominiosService.findAll();
@@ -113,6 +161,7 @@ export class CondominiosController {
 
   // Rutas específicas de usuarios - DEBEN ir antes de las rutas con :id
   // El condominio se obtiene automáticamente del subdominio
+  @ApiTags('condominios-users')
   @Post('users')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(RoleGuard)
@@ -128,14 +177,43 @@ export class CondominiosController {
   @ApiResponse({
     status: 201,
     description: 'Usuario creado exitosamente',
+    type: CondominioUserResponseDto,
+    example: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      name: 'Juan Pérez',
+      email: 'juan.perez@example.com',
+      role: 'ADMIN',
+      firstName: 'Juan',
+      lastName: 'Pérez',
+      tipoDocumento: 'CC',
+      numeroDocumento: '1234567890',
+      telefono: '+57 300 123 4567',
+      unidadId: '550e8400-e29b-41d4-a716-446655440001',
+      createdAt: '2024-01-15T10:30:00.000Z',
+      updatedAt: '2024-01-15T10:30:00.000Z',
+    },
   })
   @ApiResponse({
     status: 400,
     description: 'Datos inválidos o subdominio no detectado',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'No se pudo identificar el condominio. El subdominio es requerido.',
+        error: 'Bad Request',
+      },
+    },
   })
   @ApiResponse({
     status: 403,
     description: 'No autorizado - Se requiere rol SUPERADMIN o ADMIN',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para realizar esta acción',
+        error: 'Forbidden',
+      },
+    },
   })
   async createUser(
     @Body() createUserDto: CreateCondominioUserDto,
@@ -149,6 +227,7 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios-users')
   @Get('users')
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
@@ -162,20 +241,90 @@ export class CondominiosController {
   @ApiResponse({
     status: 200,
     description: 'Lista de usuarios obtenida exitosamente',
+    type: [CondominioUserResponseDto],
+    example: [
+      {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Juan Pérez',
+        email: 'juan.perez@example.com',
+        role: 'ADMIN',
+        firstName: 'Juan',
+        lastName: 'Pérez',
+        tipoDocumento: 'CC',
+        numeroDocumento: '1234567890',
+        telefono: '+57 300 123 4567',
+        unidadId: '550e8400-e29b-41d4-a716-446655440001',
+        createdAt: '2024-01-15T10:30:00.000Z',
+        updatedAt: '2024-01-15T10:30:00.000Z',
+      },
+    ],
   })
   @ApiResponse({
     status: 403,
     description: 'No autorizado - Se requiere rol SUPERADMIN o ADMIN',
+    schema: {
+      example: {
+        statusCode: 403,
+        message: 'No tienes permisos para realizar esta acción',
+        error: 'Forbidden',
+      },
+    },
   })
   async getUsers(@Req() req: Request) {
     const condominioId = await this.getCondominioIdFromSubdomain(req);
     return this.condominiosUsersService.getUsersInCondominio(condominioId);
   }
 
+  @ApiTags('condominios-users')
   @Get('users/:userId')
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
+  @ApiOperation({
+    summary: 'Obtener un usuario específico del condominio',
+    description: 'Retorna la información detallada de un usuario específico del condominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID único del usuario',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario obtenido exitosamente',
+    type: CondominioUserResponseDto,
+    example: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      name: 'Juan Pérez',
+      email: 'juan.perez@example.com',
+      role: 'ADMIN',
+      firstName: 'Juan',
+      lastName: 'Pérez',
+      tipoDocumento: 'CC',
+      numeroDocumento: '1234567890',
+      telefono: '+57 300 123 4567',
+      unidadId: '550e8400-e29b-41d4-a716-446655440001',
+      createdAt: '2024-01-15T10:30:00.000Z',
+      updatedAt: '2024-01-15T10:30:00.000Z',
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Usuario no encontrado',
+        error: 'Not Found',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN o ADMIN',
+  })
   async getUser(@Param('userId') userId: string, @Req() req: Request) {
     const condominioId = await this.getCondominioIdFromSubdomain(req);
     return this.condominiosUsersService.getUserInCondominio(
@@ -184,11 +333,48 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios-users')
   @Patch('users/:userId/role')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
+  @ApiOperation({
+    summary: 'Actualizar el rol de un usuario',
+    description: 'Actualiza el rol de un usuario específico en el condominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID único del usuario',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        role: {
+          type: 'string',
+          enum: ['ADMIN', 'PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'],
+          example: 'ADMIN',
+        },
+      },
+    },
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Rol actualizado exitosamente',
+    type: CondominioUserResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado',
+  })
   async updateUserRole(
     @Param('userId') userId: string,
     @Body('role') role: string,
@@ -202,12 +388,39 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios-users')
   @Put('users/:userId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
   @UseInterceptors(FileInterceptor('image'))
+  @ApiOperation({
+    summary: 'Actualizar un usuario (PUT)',
+    description: 'Actualiza completamente la información de un usuario en el condominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID único del usuario',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateCondominioUserDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario actualizado exitosamente',
+    type: CondominioUserResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado',
+  })
   async updateUser(
     @Param('userId') userId: string,
     @Body() updateUserDto: UpdateCondominioUserDto,
@@ -233,12 +446,39 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios-users')
   @Patch('users/:userId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
   @UseInterceptors(FileInterceptor('image'))
+  @ApiOperation({
+    summary: 'Actualizar parcialmente un usuario (PATCH)',
+    description: 'Actualiza parcialmente la información de un usuario en el condominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID único del usuario',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateCondominioUserDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario actualizado exitosamente',
+    type: CondominioUserResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado',
+  })
   async patchUser(
     @Param('userId') userId: string,
     @Body() updateUserDto: UpdateCondominioUserDto,
@@ -264,11 +504,40 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios-users')
   @Delete('users/:userId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
+  @ApiOperation({
+    summary: 'Eliminar un usuario del condominio',
+    description: 'Elimina un usuario del condominio. Requiere rol SUPERADMIN o ADMIN.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID único del usuario a eliminar',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario eliminado exitosamente',
+    schema: {
+      example: {
+        message: 'Usuario eliminado exitosamente',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado',
+  })
   async deleteUser(@Param('userId') userId: string, @Req() req: Request) {
     const condominioId = await this.getCondominioIdFromSubdomain(req);
     return this.condominiosUsersService.deleteUserInCondominio(
@@ -280,6 +549,30 @@ export class CondominiosController {
   @Get(':id')
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
+  @ApiOperation({
+    summary: 'Obtener un condominio por ID',
+    description: 'Retorna la información detallada de un condominio específico. Requiere rol SUPERADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID único del condominio',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Condominio obtenido exitosamente',
+    type: CondominioResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Condominio no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN',
+  })
   async findOne(@Param('id') id: string) {
     return this.condominiosService.findOneSafe(id);
   }
@@ -347,6 +640,7 @@ export class CondominiosController {
 
   // Endpoint de login para usuarios de condominios (ADMIN y USER)
   // El condominioId es opcional: si no se proporciona, se detecta del subdominio
+  @ApiTags('condominios-users')
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @AllowAnonymous()
@@ -358,24 +652,42 @@ export class CondominiosController {
   @ApiResponse({
     status: 200,
     description: 'Inicio de sesión exitoso',
-    schema: {
-      example: {
-        user: {
-          id: 'uuid',
-          email: 'juan.perez@example.com',
-          name: 'Juan Pérez',
-          role: 'ADMIN',
-        },
-        session: {
-          token: 'session_token',
-          expiresAt: '2024-12-31T23:59:59.000Z',
-        },
+    type: LoginResponseDto,
+    example: {
+      user: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Juan Pérez',
+        email: 'juan.perez@example.com',
+        role: 'ADMIN',
+        firstName: 'Juan',
+        lastName: 'Pérez',
+        tipoDocumento: 'CC',
+        numeroDocumento: '1234567890',
+        telefono: '+57 300 123 4567',
+        unidadId: '550e8400-e29b-41d4-a716-446655440001',
+        createdAt: '2024-01-15T10:30:00.000Z',
+        updatedAt: '2024-01-15T10:30:00.000Z',
+      },
+      session: {
+        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        expiresAt: '2024-12-31T23:59:59.000Z',
       },
     },
   })
   @ApiResponse({
     status: 401,
     description: 'Credenciales inválidas',
+    schema: {
+      example: {
+        statusCode: 401,
+        message: 'Credenciales inválidas',
+        error: 'Unauthorized',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Datos inválidos o subdominio no detectado',
   })
   async login(
     @Body() loginDto: LoginCondominioUserDto,

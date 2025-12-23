@@ -38,11 +38,12 @@ async function generateOpenApiSpec() {
       name: "better-auth.session_token",
       description: "Cookie de sesión de Better Auth",
     })
-    .addServer("https://d043cd4b26e9.ngrok-free.app ", "Servidor de desarrollo")
-    .addServer("https://d043cd4b26e9.ngrok-free.app ", "Servidor de producción")
-    .addTag("auth", "Endpoints de autenticación")
-    .addTag("condominios", "Gestión de condominios")
-    .addTag("unidades", "Gestión de unidades")
+    .addServer("https://d043cd4b26e9.ngrok-free.app", "Servidor de desarrollo")
+    .addServer("https://d043cd4b26e9.ngrok-free.app", "Servidor de producción")
+    .addTag("auth", "Autenticación - Endpoints de autenticación de superadministradores")
+    .addTag("condominios", "Condominios - Gestión de condominios")
+    .addTag("condominios-users", "Condominios - Usuarios - Gestión de usuarios de condominios")
+    .addTag("unidades", "Unidades - Gestión de unidades residenciales")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
