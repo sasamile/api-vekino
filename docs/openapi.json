@@ -204,6 +204,7 @@
         ],
         "summary": "Crear un nuevo condominio",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       },
@@ -244,6 +245,7 @@
         },
         "summary": "Obtener todos los condominios",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       }
@@ -327,7 +329,7 @@
         ],
         "summary": "Crear un nuevo usuario en el condominio",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       },
@@ -390,7 +392,7 @@
         ],
         "summary": "Obtener todos los usuarios del condominio",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       }
@@ -464,7 +466,7 @@
         ],
         "summary": "Obtener un usuario específico del condominio",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       },
@@ -521,7 +523,7 @@
         ],
         "summary": "Actualizar un usuario (PUT)",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       },
@@ -578,7 +580,7 @@
         ],
         "summary": "Actualizar parcialmente un usuario (PATCH)",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       },
@@ -627,7 +629,7 @@
         ],
         "summary": "Eliminar un usuario del condominio",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       }
@@ -698,7 +700,7 @@
         ],
         "summary": "Actualizar el rol de un usuario",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       }
@@ -747,17 +749,21 @@
         ],
         "summary": "Obtener un condominio por ID",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       },
       "put": {
+        "description": "Actualiza la información de un condominio. Requiere rol SUPERADMIN.",
         "operationId": "CondominiosController_update",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "ID único del condominio",
             "schema": {
+              "example": "550e8400-e29b-41d4-a716-446655440000",
               "type": "string"
             }
           }
@@ -765,7 +771,7 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateCondominioDto"
               }
@@ -774,93 +780,196 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Condominio actualizado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CondominioResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No autorizado"
+          },
+          "404": {
+            "description": "Condominio no encontrado"
           }
         },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Actualizar un condominio",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       }
     },
     "/condominios/{id}/deactivate": {
       "post": {
+        "description": "Desactiva un condominio sin eliminarlo. Requiere rol SUPERADMIN.",
         "operationId": "CondominiosController_deactivate",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "ID único del condominio",
             "schema": {
+              "example": "550e8400-e29b-41d4-a716-446655440000",
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Condominio desactivado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CondominioResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Condominio no encontrado"
           }
         },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Desactivar un condominio",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       }
     },
     "/condominios/{id}/delete": {
       "post": {
+        "description": "Elimina permanentemente un condominio. Requiere rol SUPERADMIN.",
         "operationId": "CondominiosController_delete",
         "parameters": [
           {
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "ID único del condominio",
             "schema": {
+              "example": "550e8400-e29b-41d4-a716-446655440000",
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Condominio eliminado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "message": "Condominio eliminado exitosamente"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Condominio no encontrado"
           }
         },
+        "security": [
+          {
+            "better-auth.session_token": []
+          },
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Eliminar un condominio",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       }
     },
     "/condominios/validate-subdomain/{subdomain}": {
       "get": {
+        "description": "Valida si un subdominio está disponible para uso",
         "operationId": "CondominiosController_validateSubdomain",
         "parameters": [
           {
             "name": "subdomain",
             "required": true,
             "in": "path",
+            "description": "Subdominio a validar",
             "schema": {
+              "example": "las-flores",
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Resultado de la validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "available": true,
+                    "message": "Subdominio disponible"
+                  }
+                }
+              }
+            }
           }
         },
+        "summary": "Validar disponibilidad de subdominio",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       }
     },
     "/condominios/config": {
       "get": {
+        "description": "Retorna la configuración visual (logo, color) del condominio detectado del subdominio",
         "operationId": "CondominiosController_getConfig",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Configuración obtenida exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "logo": "https://example.com/logo.png",
+                    "primaryColor": "#3B82F6",
+                    "name": "Condominio Las Flores"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Subdominio no detectado"
           }
         },
+        "summary": "Obtener configuración visual del condominio",
         "tags": [
+          "Condominios",
           "condominios"
         ]
       }
@@ -931,7 +1040,7 @@
         },
         "summary": "Iniciar sesión como usuario de condominio",
         "tags": [
-          "condominios",
+          "Condominios",
           "condominios-users"
         ]
       }

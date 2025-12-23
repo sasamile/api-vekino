@@ -51,7 +51,6 @@ import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { Subdomain } from '../decorators/subdomain.decorator';
 
 
-@ApiTags('condominios')
 @Controller('condominios')
 export class CondominiosController {
   constructor(
@@ -59,6 +58,7 @@ export class CondominiosController {
     private readonly condominiosUsersService: CondominiosUsersService,
   ) {}
 
+  @ApiTags('condominios')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(RoleGuard)
@@ -129,6 +129,7 @@ export class CondominiosController {
     return this.condominiosService.createCondominio(createCondominioDto, logo);
   }
 
+  @ApiTags('condominios')
   @Get()
   @ApiOperation({
     summary: 'Obtener todos los condominios',
@@ -546,6 +547,7 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios')
   @Get(':id')
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
@@ -577,11 +579,38 @@ export class CondominiosController {
     return this.condominiosService.findOneSafe(id);
   }
 
+  @ApiTags('condominios')
   @Put(':id')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
   @UseInterceptors(FileInterceptor('logo'))
+  @ApiOperation({
+    summary: 'Actualizar un condominio',
+    description: 'Actualiza la información de un condominio. Requiere rol SUPERADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID único del condominio',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateCondominioDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Condominio actualizado exitosamente',
+    type: CondominioResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Condominio no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado',
+  })
   async update(
     @Param('id') id: string,
     @Body() updateCondominioDto: UpdateCondominioDto,
@@ -603,34 +632,120 @@ export class CondominiosController {
     );
   }
 
+  @ApiTags('condominios')
   @Post(':id/deactivate')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
+  @ApiOperation({
+    summary: 'Desactivar un condominio',
+    description: 'Desactiva un condominio sin eliminarlo. Requiere rol SUPERADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID único del condominio',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Condominio desactivado exitosamente',
+    type: CondominioResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Condominio no encontrado',
+  })
   async deactivate(@Param('id') id: string) {
     return this.condominiosService.deactivateCondominio(id);
   }
 
+  @ApiTags('condominios')
   @Post(':id/delete')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
+  @ApiOperation({
+    summary: 'Eliminar un condominio',
+    description: 'Elimina permanentemente un condominio. Requiere rol SUPERADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID único del condominio',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Condominio eliminado exitosamente',
+    schema: {
+      example: {
+        message: 'Condominio eliminado exitosamente',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Condominio no encontrado',
+  })
   async delete(@Param('id') id: string) {
     return this.condominiosService.deleteCondominio(id);
   }
 
   // Validación de subdominio en tiempo real
+  @ApiTags('condominios')
   @Get('validate-subdomain/:subdomain')
   @HttpCode(HttpStatus.OK)
   @AllowAnonymous()
+  @ApiOperation({
+    summary: 'Validar disponibilidad de subdominio',
+    description: 'Valida si un subdominio está disponible para uso',
+  })
+  @ApiParam({
+    name: 'subdomain',
+    description: 'Subdominio a validar',
+    example: 'las-flores',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Resultado de la validación',
+    schema: {
+      example: {
+        available: true,
+        message: 'Subdominio disponible',
+      },
+    },
+  })
   async validateSubdomain(@Param('subdomain') subdomain: string) {
     return this.condominiosService.validateSubdomain(subdomain);
   }
 
   // Obtener configuración visual del condominio (logo, color)
+  @ApiTags('condominios')
   @Get('config')
   @HttpCode(HttpStatus.OK)
   @AllowAnonymous()
+  @ApiOperation({
+    summary: 'Obtener configuración visual del condominio',
+    description: 'Retorna la configuración visual (logo, color) del condominio detectado del subdominio',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Configuración obtenida exitosamente',
+    schema: {
+      example: {
+        logo: 'https://example.com/logo.png',
+        primaryColor: '#3B82F6',
+        name: 'Condominio Las Flores',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Subdominio no detectado',
+  })
   async getConfig(@Subdomain() subdomain: string | null) {
     if (!subdomain) {
       throw new BadRequestException('Subdominio no detectado');
