@@ -12,7 +12,13 @@ import {
   Req,
   UseGuards,
   BadRequestException,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { CondominiosService } from './condominios.service';
 import { CondominiosUsersService } from './condominios-users.service';
@@ -25,9 +31,9 @@ import {
   RequireRole,
   RequireCondominioAccess,
   RoleGuard,
-} from './guards/require-role.guard';
+} from '../guards/require-role.guard';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
-import { Subdomain } from './decorators/subdomain.decorator';
+import { Subdomain } from '../decorators/subdomain.decorator';
 
 
 @Controller('condominios')
@@ -41,8 +47,21 @@ export class CondominiosController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
-  async create(@Body() createCondominioDto: CreateCondominioDto) {
-    return this.condominiosService.createCondominio(createCondominioDto);
+  @UseInterceptors(FileInterceptor('logo'))
+  async create(
+    @Body() createCondominioDto: CreateCondominioDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    logo?: Express.Multer.File,
+  ) {
+    return this.condominiosService.createCondominio(createCondominioDto, logo);
   }
 
   @Get()
@@ -63,11 +82,26 @@ export class CondominiosController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(RoleGuard)
   @RequireRole('SUPERADMIN')
+  @UseInterceptors(FileInterceptor('logo'))
   async update(
     @Param('id') id: string,
     @Body() updateCondominioDto: UpdateCondominioDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    logo?: Express.Multer.File,
   ) {
-    return this.condominiosService.updateCondominio(id, updateCondominioDto);
+    return this.condominiosService.updateCondominio(
+      id,
+      updateCondominioDto,
+      logo,
+    );
   }
 
   @Post(':id/deactivate')
@@ -183,17 +217,29 @@ export class CondominiosController {
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
+  @UseInterceptors(FileInterceptor('image'))
   async updateUser(
     @Param('id') condominioId: string,
     @Param('userId') userId: string,
     @Body() updateUserDto: UpdateCondominioUserDto,
-    @Req() req: Request,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    imageFile?: Express.Multer.File,
+    @Req() req?: Request,
   ) {
     return this.condominiosUsersService.updateUserInCondominio(
       condominioId,
       userId,
       updateUserDto,
       req,
+      imageFile,
     );
   }
 
@@ -202,17 +248,29 @@ export class CondominiosController {
   @UseGuards(RoleGuard)
   @RequireRole(['SUPERADMIN', 'ADMIN'])
   @RequireCondominioAccess()
+  @UseInterceptors(FileInterceptor('image'))
   async patchUser(
     @Param('id') condominioId: string,
     @Param('userId') userId: string,
     @Body() updateUserDto: UpdateCondominioUserDto,
-    @Req() req: Request,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    imageFile?: Express.Multer.File,
+    @Req() req?: Request,
   ) {
     return this.condominiosUsersService.updateUserInCondominio(
       condominioId,
       userId,
       updateUserDto,
       req,
+      imageFile,
     );
   }
 

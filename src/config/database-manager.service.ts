@@ -101,6 +101,21 @@ export class DatabaseManagerService implements OnModuleDestroy {
       // Verificar si las tablas ya existen
       const prisma = this.getPrismaClientForCondominio(databaseUrl);
       await prisma.$queryRaw`SELECT 1 FROM "user" LIMIT 1`;
+      
+      // Verificar si el campo identificationNumber existe, si no, agregarlo
+      try {
+        await prisma.$queryRaw`SELECT "identificationNumber" FROM "user" LIMIT 1`;
+      } catch (error: any) {
+        // Si el campo no existe, agregarlo
+        if (error.message?.includes('does not exist') || error.code === '42703') {
+          console.log('📝 Agregando campo identificationNumber a la tabla user...');
+          await prisma.$executeRaw`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "identificationNumber" STRING;`;
+          console.log('✅ Campo identificationNumber agregado correctamente');
+        } else {
+          throw error;
+        }
+      }
+      
       console.log('✅ El esquema ya está inicializado en esta base de datos');
       return;
     } catch (error) {
@@ -142,6 +157,7 @@ export class DatabaseManagerService implements OnModuleDestroy {
               "email" STRING NOT NULL,
               "emailVerified" BOOL NOT NULL DEFAULT false,
               "image" STRING,
+              "identificationNumber" STRING,
               "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
               "updatedAt" TIMESTAMP(3) NOT NULL,
               "role" "UserRole" NOT NULL DEFAULT 'USER',

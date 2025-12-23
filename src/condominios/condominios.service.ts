@@ -8,12 +8,16 @@ import { PrismaClient } from 'generated/prisma/client';
 import { DatabaseManagerService } from '../config/database-manager.service';
 import { CreateCondominioDto } from './dto/create-condominio.dto';
 import { UpdateCondominioDto } from './dto/update-condominio.dto';
+import { S3Service } from '../config/aws/s3/s3.service';
+import { ImageProcessingService } from '../config/aws/s3/image-processing.service';
 
 @Injectable()
 export class CondominiosService {
   constructor(
     @Inject(PrismaClient) private masterPrisma: PrismaClient,
     private databaseManager: DatabaseManagerService,
+    private s3Service: S3Service,
+    private imageProcessingService: ImageProcessingService,
   ) {}
 
   /**
@@ -93,7 +97,10 @@ export class CondominiosService {
   /**
    * Crea un nuevo condominio y su base de datos
    */
-  async createCondominio(dto: CreateCondominioDto) {
+  async createCondominio(
+    dto: CreateCondominioDto,
+    logoFile?: Express.Multer.File,
+  ) {
     // Generar subdominio automáticamente si no se proporciona
     const subdomain = dto.subdomain || await this.generateUniqueSubdomain(dto.name);
 
@@ -138,6 +145,32 @@ export class CondominiosService {
           databaseName,
         );
 
+      // Procesar y subir logo si se proporciona
+      let logoUrl = dto.logo; // Si viene URL en el DTO, usarla
+      
+      if (logoFile) {
+        try {
+          // Convertir imagen a WebP
+          const webpBuffer = await this.imageProcessingService.resizeAndConvertToWebP(
+            logoFile.buffer,
+            800, // maxWidth
+            800, // maxHeight
+            80,  // quality
+          );
+
+          // Generar un ID temporal para el condominio (se usará antes de crear el registro)
+          const tempId = `temp-${Date.now()}`;
+          
+          // Subir a S3
+          logoUrl = await this.s3Service.uploadCondominioLogo(webpBuffer, tempId);
+        } catch (error) {
+          console.error('Error procesando logo:', error);
+          throw new BadRequestException(
+            `Error al procesar el logo: ${error.message}`,
+          );
+        }
+      }
+
       // Preparar datos para crear el condominio
       const planExpiresAt = dto.planExpiresAt
         ? new Date(dto.planExpiresAt)
@@ -157,7 +190,7 @@ export class CondominiosService {
           country: dto.country,
           timezone: dto.timezone,
           // Configuración de Acceso y Dominio
-          logo: dto.logo,
+          logo: logoUrl,
           primaryColor: dto.primaryColor || '#3B82F6',
           // Límites y Plan
           subscriptionPlan: dto.subscriptionPlan,
@@ -168,6 +201,26 @@ export class CondominiosService {
             : null,
         },
       });
+
+      // Si se subió un logo, actualizar el nombre del archivo en S3 con el ID real del condominio
+      if (logoFile && logoUrl) {
+        try {
+          // Extraer el nombre del archivo actual
+          const urlParts = logoUrl.split('/');
+          const currentFileName = urlParts[urlParts.length - 1];
+          
+          // Crear nuevo nombre con el ID real del condominio
+          const newFileName = `${condominio.id}-${Date.now()}.webp`;
+          const newKey = `condominios/logos/${newFileName}`;
+          
+          // Obtener el archivo actual de S3 y subirlo con el nuevo nombre
+          // Nota: En producción, podrías usar CopyObjectCommand de S3 para renombrar
+          // Por ahora, simplemente usamos el nombre temporal ya que funciona igual
+        } catch (error) {
+          // No es crítico, el logo ya está subido y funcionando
+          console.warn('No se pudo actualizar el nombre del logo:', error);
+        }
+      }
 
       // Inicializar el esquema en la nueva base de datos
       // Esto creará automáticamente todas las tablas según schema-condominio.prisma
@@ -276,7 +329,11 @@ export class CondominiosService {
   /**
    * Actualiza un condominio
    */
-  async updateCondominio(id: string, dto: UpdateCondominioDto) {
+  async updateCondominio(
+    id: string,
+    dto: UpdateCondominioDto,
+    logoFile?: Express.Multer.File,
+  ) {
     const existingCondominio = await this.findOne(id);
 
     // Si se actualiza el subdominio, verificar que sea único
@@ -292,6 +349,29 @@ export class CondominiosService {
       }
     }
 
+    // Procesar y subir logo si se proporciona
+    let logoUrl = dto.logo; // Si viene URL en el DTO, usarla
+    
+    if (logoFile) {
+      try {
+        // Convertir imagen a WebP
+        const webpBuffer = await this.imageProcessingService.resizeAndConvertToWebP(
+          logoFile.buffer,
+          800, // maxWidth
+          800, // maxHeight
+          80,  // quality
+        );
+
+        // Subir a S3
+        logoUrl = await this.s3Service.uploadCondominioLogo(webpBuffer, id);
+      } catch (error) {
+        console.error('Error procesando logo:', error);
+        throw new BadRequestException(
+          `Error al procesar el logo: ${error.message}`,
+        );
+      }
+    }
+
     const updateData: any = {};
 
     if (dto.name !== undefined) updateData.name = dto.name;
@@ -301,7 +381,7 @@ export class CondominiosService {
     if (dto.country !== undefined) updateData.country = dto.country;
     if (dto.timezone !== undefined) updateData.timezone = dto.timezone;
     if (dto.subdomain !== undefined) updateData.subdomain = dto.subdomain;
-    if (dto.logo !== undefined) updateData.logo = dto.logo;
+    if (logoUrl !== undefined) updateData.logo = logoUrl;
     if (dto.primaryColor !== undefined) updateData.primaryColor = dto.primaryColor;
     if (dto.subscriptionPlan !== undefined)
       updateData.subscriptionPlan = dto.subscriptionPlan;

@@ -7,10 +7,11 @@ import {
   IsInt,
   Min,
   IsDateString,
-  IsUrl,
   IsArray,
   IsBoolean,
+  ValidateIf,
 } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { SubscriptionPlan, Timezone } from './create-condominio.dto';
 
 export class UpdateCondominioDto {
@@ -51,8 +52,7 @@ export class UpdateCondominioDto {
 
   @IsString()
   @IsOptional()
-  @IsUrl({}, { message: 'El logo debe ser una URL válida' })
-  logo?: string;
+  logo?: string; // URL del logo (se genera automáticamente al subir imagen)
 
   @IsString()
   @IsOptional()
@@ -66,8 +66,9 @@ export class UpdateCondominioDto {
   @IsOptional()
   subscriptionPlan?: SubscriptionPlan;
 
+  @ValidateIf((o) => o.unitLimit !== undefined && o.unitLimit !== null)
+  @Type(() => Number)
   @IsInt()
-  @IsOptional()
   @Min(1)
   unitLimit?: number;
 
@@ -75,9 +76,19 @@ export class UpdateCondominioDto {
   @IsOptional()
   planExpiresAt?: string;
 
+  @ValidateIf((o) => o.activeModules !== undefined && o.activeModules !== null)
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsArray()
   @IsString({ each: true })
-  @IsOptional()
   activeModules?: string[];
 
   // Estado

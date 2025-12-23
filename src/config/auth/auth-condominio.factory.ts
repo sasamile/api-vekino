@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { PrismaClient } from 'generated/prisma/client';
-import { DatabaseManagerService } from './database-manager.service';
+import { DatabaseManagerService } from '../database-manager.service';
 
 /**
  * Crea una instancia de Better Auth para un condominio específico

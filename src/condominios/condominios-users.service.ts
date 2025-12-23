@@ -11,6 +11,8 @@ import { CreateCondominioUserDto } from './dto/create-condominio-user.dto';
 import { UpdateCondominioUserDto } from './dto/update-condominio-user.dto';
 import { LoginCondominioUserDto } from './dto/login-condominio-user.dto';
 import { DatabaseManagerService } from '../config/database-manager.service';
+import { S3Service } from '../config/aws/s3/s3.service';
+import { ImageProcessingService } from '../config/aws/s3/image-processing.service';
 
 @Injectable()
 export class CondominiosUsersService {
@@ -18,6 +20,8 @@ export class CondominiosUsersService {
     @Inject(PrismaClient) private masterPrisma: PrismaClient,
     private condominiosService: CondominiosService,
     private databaseManager: DatabaseManagerService,
+    private s3Service: S3Service,
+    private imageProcessingService: ImageProcessingService,
   ) {}
 
   /**
@@ -52,6 +56,29 @@ export class CondominiosUsersService {
     }
 
     try {
+      // Asegurar que el campo identificationNumber existe en la tabla
+      try {
+        // Verificar si el campo existe
+        await condominioPrisma.$queryRaw`SELECT "identificationNumber" FROM "user" LIMIT 1`;
+      } catch (error: any) {
+        // Si el campo no existe, agregarlo
+        if (error.message?.includes('does not exist') || error.code === '42703') {
+          try {
+            await condominioPrisma.$executeRaw`
+              ALTER TABLE "user" ADD COLUMN "identificationNumber" STRING;
+            `;
+            console.log('✅ Campo identificationNumber agregado a la tabla user');
+          } catch (alterError: any) {
+            // Si falla porque ya existe o por otro motivo, continuar
+            if (!alterError.message?.includes('already exists') && alterError.code !== '42701') {
+              console.warn('Advertencia al agregar campo identificationNumber:', alterError.message);
+            }
+          }
+        } else {
+          throw error;
+        }
+      }
+
       // Crear el usuario directamente usando SQL para evitar problemas con el schema
       const { randomUUID } = await import('crypto');
       const userId = randomUUID();
@@ -75,8 +102,8 @@ export class CondominiosUsersService {
 
       // Crear el usuario en la base de datos
       await condominioPrisma.$executeRaw`
-        INSERT INTO "user" (id, name, email, "emailVerified", role, "createdAt", "updatedAt")
-        VALUES (${userId}, ${dto.name}, ${dto.email}, false, ${dto.role}::"UserRole", NOW(), NOW())
+        INSERT INTO "user" (id, name, email, "emailVerified", role, "identificationNumber", "createdAt", "updatedAt")
+        VALUES (${userId}, ${dto.name}, ${dto.email}, false, ${dto.role}::"UserRole", ${dto.identificationNumber || null}, NOW(), NOW())
       `;
 
       // Crear la cuenta con la contraseña hasheada
@@ -178,6 +205,7 @@ export class CondominiosUsersService {
     userId: string,
     dto: UpdateCondominioUserDto,
     req?: any,
+    imageFile?: Express.Multer.File,
   ) {
     const condominio = await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
@@ -254,6 +282,34 @@ export class CondominiosUsersService {
       updateData.role = dto.role as any;
     }
 
+    if (dto.identificationNumber !== undefined) {
+      updateData.identificationNumber = dto.identificationNumber;
+    }
+
+    // Procesar y subir imagen si se proporciona
+    let imageUrl: string | undefined = undefined;
+    
+    if (imageFile) {
+      try {
+        // Convertir imagen a WebP
+        const webpBuffer = await this.imageProcessingService.resizeAndConvertToWebP(
+          imageFile.buffer,
+          400, // maxWidth para imágenes de perfil
+          400, // maxHeight para imágenes de perfil
+          80,  // quality
+        );
+
+        // Subir a S3
+        imageUrl = await this.s3Service.uploadUserImage(webpBuffer, userId);
+        updateData.image = imageUrl;
+      } catch (error) {
+        console.error('Error procesando imagen de usuario:', error);
+        throw new BadRequestException(
+          `Error al procesar la imagen: ${error.message}`,
+        );
+      }
+    }
+
     // Actualizar el usuario usando SQL directo (hacer un solo UPDATE)
     const updates: string[] = [];
     const values: any[] = [];
@@ -269,6 +325,38 @@ export class CondominiosUsersService {
     if (updateData.role !== undefined) {
       updates.push(`role = $${values.length + 1}::"UserRole"`);
       values.push(updateData.role);
+    }
+    if (updateData.identificationNumber !== undefined) {
+      // Asegurar que el campo identificationNumber existe en la tabla
+      try {
+        // Verificar si el campo existe
+        await condominioPrisma.$queryRaw`SELECT "identificationNumber" FROM "user" LIMIT 1`;
+      } catch (error: any) {
+        // Si el campo no existe, agregarlo
+        if (error.message?.includes('does not exist') || error.code === '42703') {
+          try {
+            await condominioPrisma.$executeRaw`
+              ALTER TABLE "user" ADD COLUMN "identificationNumber" STRING;
+            `;
+            console.log('✅ Campo identificationNumber agregado a la tabla user');
+          } catch (alterError: any) {
+            // Si falla porque ya existe o por otro motivo, continuar
+            if (!alterError.message?.includes('already exists') && alterError.code !== '42701') {
+              console.warn('Advertencia al agregar campo identificationNumber:', alterError.message);
+            }
+          }
+        } else {
+          throw error;
+        }
+      }
+      
+      updates.push(`"identificationNumber" = $${values.length + 1}`);
+      values.push(updateData.identificationNumber || null);
+    }
+
+    if (updateData.image !== undefined) {
+      updates.push(`image = $${values.length + 1}`);
+      values.push(updateData.image);
     }
 
     if (updates.length > 0) {

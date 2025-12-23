@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { PrismaClient } from 'generated/prisma/client';
 import { Inject } from '@nestjs/common';
-import { auth } from '../../config/auth';
+import { auth } from '../config/auth/auth';
 import { fromNodeHeaders } from 'better-auth/node';
 
 export const ROLE_KEY = 'role';

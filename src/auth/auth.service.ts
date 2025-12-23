@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, UnauthorizedException, Inject } from "@nestjs/common";
 import { Request } from "express";
-import { auth } from "../config/auth";
+import { auth } from "../config/auth/auth";
 import { PrismaClient } from "generated/prisma/client";
 import { RegisterSuperadminDto } from "./dto/superadmin/register-superadmin.dto";
 import { LoginSuperadminDto } from "./dto/superadmin/login-superadmin.dto";

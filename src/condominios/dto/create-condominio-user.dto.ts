@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsEmail, MinLength, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsEmail, MinLength, IsEnum, IsOptional } from 'class-validator';
 
 export enum CondominioUserRole {
   ADMIN = 'ADMIN',
@@ -22,6 +22,10 @@ export class CreateCondominioUserDto {
 
   @IsEnum(CondominioUserRole)
   role: CondominioUserRole;
+
+  @IsString()
+  @IsOptional()
+  identificationNumber?: string; // Número de identificación (opcional)
 }
 
 

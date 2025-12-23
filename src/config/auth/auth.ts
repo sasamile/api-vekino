@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
-import { getPrismaClient } from "./prisma.provider";
+import { getPrismaClient } from "../prisma.provider";
 
 // Usar la misma instancia de PrismaClient del provider
 const prisma = getPrismaClient();

@@ -52,9 +52,18 @@ $ npm install
 Crea un archivo `.env` con las siguientes variables:
 
 ```env
+# Base de datos
 DATABASE_URL=postgresql://user:password@host:26257/defaultdb?sslmode=require
+
+# Better Auth
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=your-secret-key-change-in-production
+
+# AWS S3 (para subida de imágenes)
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
+AWS_S3_BUCKET_NAME=your-bucket-name
 ```
 
 ### Migraciones
@@ -125,13 +134,26 @@ Content-Type: application/json
 ```bash
 POST /condominios
 Authorization: Bearer <token>
-Content-Type: application/json
+Content-Type: multipart/form-data
 
 {
   "name": "Condominio Las Flores",
-  "databaseName": "condominio_las_flores"
+  "nit": "123456789",
+  "address": "Calle 123",
+  "city": "Bogotá",
+  "country": "Colombia",
+  "timezone": "AMERICA_BOGOTA",
+  "primaryColor": "#3B82F6",
+  "subscriptionPlan": "BASICO",
+  "unitLimit": 100,
+  "logo": <archivo de imagen> (opcional, se convierte automáticamente a WebP)
 }
 ```
+
+**Nota**: El logo se procesa automáticamente:
+- Se convierte a formato WebP para reducir el tamaño
+- Se redimensiona a máximo 800x800px manteniendo la proporción
+- Se sube a AWS S3 y se guarda la URL en la base de datos
 
 Esto creará:
 - Un nuevo registro en la base de datos maestra

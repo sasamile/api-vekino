@@ -10,9 +10,9 @@ import {
   IsEmail,
   IsArray,
   IsDateString,
-  IsUrl,
   ValidateIf,
 } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 export enum SubscriptionPlan {
   BASICO = 'BASICO',
@@ -80,8 +80,7 @@ export class CreateCondominioDto {
 
   @IsString()
   @IsOptional()
-  @IsUrl({}, { message: 'El logo debe ser una URL válida' })
-  logo?: string; // URL del logo
+  logo?: string; // URL del logo (se genera automáticamente al subir imagen)
 
   @IsString()
   @IsOptional()
@@ -95,8 +94,9 @@ export class CreateCondominioDto {
   @IsOptional()
   subscriptionPlan?: SubscriptionPlan;
 
+  @ValidateIf((o) => o.unitLimit !== undefined && o.unitLimit !== null)
+  @Type(() => Number)
   @IsInt()
-  @IsOptional()
   @Min(1)
   unitLimit?: number; // Límite de unidades
 
@@ -104,9 +104,19 @@ export class CreateCondominioDto {
   @IsOptional()
   planExpiresAt?: string; // Fecha de vencimiento del plan
 
+  @ValidateIf((o) => o.activeModules !== undefined && o.activeModules !== null)
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   @IsArray()
   @IsString({ each: true })
-  @IsOptional()
   activeModules?: string[]; // Módulos activos: ["reservas", "documentos", "pqrs"]
 
   // Campos técnicos (opcionales, se generan automáticamente)

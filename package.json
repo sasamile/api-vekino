@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.957.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/graphql": "^13.2.3",
@@ -30,6 +31,8 @@
     "@prisma/client": "^7.2.0",
     "@thallesp/nestjs-better-auth": "^2.2.0",
     "@types/cookie-parser": "^1.4.10",
+    "@types/multer": "^2.0.0",
+    "@types/uuid": "^10.0.0",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.7",
     "class-transformer": "^0.5.1",
@@ -40,7 +43,9 @@
     "prisma": "^7.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.2"
+    "sharp": "^0.34.5",
+    "socket.io": "^4.8.2",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@better-auth/cli": "^1.4.7",
