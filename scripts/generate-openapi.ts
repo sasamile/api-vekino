@@ -19,7 +19,35 @@ async function generateOpenApiSpec() {
 
   const config = new DocumentBuilder()
     .setTitle("API Vekino")
-    .setDescription("API para gestión de condominios")
+    .setDescription(
+      `API para gestión de condominios
+
+## Sistema de Subdominios
+
+Esta API utiliza un sistema de subdominios para identificar condominios. Los endpoints de usuarios y unidades requieren que se acceda a través del subdominio del condominio.
+
+### Ejemplos de URLs:
+- **Desarrollo local**: \`http://condominio-las-flores.localhost:3000\`
+- **Producción**: \`https://condominio-las-flores.tudominio.com\`
+
+### Endpoints que requieren subdominio:
+- Todos los endpoints bajo \`/condominios/users\` (excepto \`/condominios/login\`)
+- Todos los endpoints bajo \`/unidades\`
+- \`GET /condominios/config\`
+
+### Endpoints que NO requieren subdominio:
+- \`POST /auth/superadmin/*\` - Autenticación de superadministradores
+- \`POST /condominios\` - Crear condominio (requiere SUPERADMIN)
+- \`GET /condominios\` - Listar todos los condominios
+- \`GET /condominios/{id}\` - Obtener condominio por ID
+- \`POST /condominios/login\` - Login de usuarios (detecta subdominio automáticamente)
+- \`GET /condominios/validate-subdomain/{subdomain}\` - Validar subdominio
+
+### Autenticación:
+- **Superadministradores**: Usan \`/auth/superadmin/login\` y obtienen un token JWT
+- **Usuarios de condominios**: Usan \`/condominios/login\` y obtienen una cookie de sesión
+- Las cookies de sesión funcionan solo en el subdominio específico del condominio`
+    )
     .setVersion("1.0")
     .addBearerAuth(
       {
@@ -38,8 +66,8 @@ async function generateOpenApiSpec() {
       name: "better-auth.session_token",
       description: "Cookie de sesión de Better Auth",
     })
-    .addServer("https://d043cd4b26e9.ngrok-free.app", "Servidor de desarrollo")
-    .addServer("https://d043cd4b26e9.ngrok-free.app", "Servidor de producción")
+    .addServer("http://localhost:3000", "Servidor base (sin subdominio) - Para endpoints de superadmin y creación de condominios")
+    .addServer("http://condominio-las-flores.localhost:3000", "Servidor con subdominio - Para endpoints de usuarios y unidades (ejemplo)")
     .addTag("auth", "Autenticación - Endpoints de autenticación de superadministradores")
     .addTag("condominios", "Condominios - Gestión de condominios")
     .addTag("condominios-users", "Condominios - Usuarios - Gestión de usuarios de condominios")

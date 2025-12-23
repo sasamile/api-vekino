@@ -170,7 +170,11 @@ export class CondominiosController {
   @RequireCondominioAccess()
   @ApiOperation({
     summary: 'Crear un nuevo usuario en el condominio',
-    description: 'Crea un nuevo usuario en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.',
+    description: `Crea un nuevo usuario en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.
+
+**Importante**: Este endpoint debe ser llamado desde el subdominio del condominio.
+- Ejemplo: \`http://condominio-las-flores.localhost:3000/condominios/users\`
+- El subdominio se detecta automáticamente del header \`Host\` de la petición.`,
   })
   @ApiBody({ type: CreateCondominioUserDto })
   @ApiBearerAuth('JWT-auth')
@@ -235,7 +239,10 @@ export class CondominiosController {
   @RequireCondominioAccess()
   @ApiOperation({
     summary: 'Obtener todos los usuarios del condominio',
-    description: 'Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.',
+    description: `Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.
+
+**Importante**: Este endpoint debe ser llamado desde el subdominio del condominio.
+- Ejemplo: \`http://condominio-las-flores.localhost:3000/condominios/users\``,
   })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
@@ -761,7 +768,13 @@ export class CondominiosController {
   @AllowAnonymous()
   @ApiOperation({
     summary: 'Iniciar sesión como usuario de condominio',
-    description: 'Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.',
+    description: `Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.
+
+**Importante**: Este endpoint puede ser llamado desde el subdominio del condominio o desde el servidor base.
+- Con subdominio: \`http://condominio-las-flores.localhost:3000/condominios/login\` (recomendado)
+- Sin subdominio: \`http://localhost:3000/condominios/login\` (debe incluir \`condominioId\` en el body)
+
+La sesión se establece mediante una cookie que funciona solo en el subdominio específico.`,
   })
   @ApiBody({ type: LoginCondominioUserDto })
   @ApiResponse({

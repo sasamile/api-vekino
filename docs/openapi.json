@@ -250,7 +250,7 @@
     },
     "/condominios/users": {
       "post": {
-        "description": "Crea un nuevo usuario en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.",
+        "description": "Crea un nuevo usuario en el condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.\n\n**Importante**: Este endpoint debe ser llamado desde el subdominio del condominio.\n- Ejemplo: `http://condominio-las-flores.localhost:3000/condominios/users`\n- El subdominio se detecta automáticamente del header `Host` de la petición.",
         "operationId": "createUser",
         "parameters": [],
         "requestBody": {
@@ -331,7 +331,7 @@
         ]
       },
       "get": {
-        "description": "Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.",
+        "description": "Retorna una lista de todos los usuarios del condominio detectado del subdominio. Requiere rol SUPERADMIN o ADMIN.\n\n**Importante**: Este endpoint debe ser llamado desde el subdominio del condominio.\n- Ejemplo: `http://condominio-las-flores.localhost:3000/condominios/users`",
         "operationId": "getUsers",
         "parameters": [],
         "responses": {
@@ -961,7 +961,7 @@
     },
     "/condominios/login": {
       "post": {
-        "description": "Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.",
+        "description": "Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.\n\n**Importante**: Este endpoint puede ser llamado desde el subdominio del condominio o desde el servidor base.\n- Con subdominio: `http://condominio-las-flores.localhost:3000/condominios/login` (recomendado)\n- Sin subdominio: `http://localhost:3000/condominios/login` (debe incluir `condominioId` en el body)\n\nLa sesión se establece mediante una cookie que funciona solo en el subdominio específico.",
         "operationId": "login",
         "parameters": [],
         "requestBody": {
@@ -1276,7 +1276,7 @@
   },
   "info": {
     "title": "API Vekino",
-    "description": "API para gestión de condominios",
+    "description": "API para gestión de condominios\n\n## Sistema de Subdominios\n\nEsta API utiliza un sistema de subdominios para identificar condominios. Los endpoints de usuarios y unidades requieren que se acceda a través del subdominio del condominio.\n\n### Ejemplos de URLs:\n- **Desarrollo local**: `http://condominio-las-flores.localhost:3000`\n- **Producción**: `https://condominio-las-flores.tudominio.com`\n\n### Endpoints que requieren subdominio:\n- Todos los endpoints bajo `/condominios/users` (excepto `/condominios/login`)\n- Todos los endpoints bajo `/unidades`\n- `GET /condominios/config`\n\n### Endpoints que NO requieren subdominio:\n- `POST /auth/superadmin/*` - Autenticación de superadministradores\n- `POST /condominios` - Crear condominio (requiere SUPERADMIN)\n- `GET /condominios` - Listar todos los condominios\n- `GET /condominios/{id}` - Obtener condominio por ID\n- `POST /condominios/login` - Login de usuarios (detecta subdominio automáticamente)\n- `GET /condominios/validate-subdomain/{subdomain}` - Validar subdominio\n\n### Autenticación:\n- **Superadministradores**: Usan `/auth/superadmin/login` y obtienen un token JWT\n- **Usuarios de condominios**: Usan `/condominios/login` y obtienen una cookie de sesión\n- Las cookies de sesión funcionan solo en el subdominio específico del condominio",
     "version": "1.0",
     "contact": {}
   },
@@ -1300,12 +1300,12 @@
   ],
   "servers": [
     {
-      "url": "https://d043cd4b26e9.ngrok-free.app",
-      "description": "Servidor de desarrollo"
+      "url": "http://localhost:3000",
+      "description": "Servidor base (sin subdominio) - Para endpoints de superadmin y creación de condominios"
     },
     {
-      "url": "https://d043cd4b26e9.ngrok-free.app",
-      "description": "Servidor de producción"
+      "url": "http://condominio-las-flores.localhost:3000",
+      "description": "Servidor con subdominio - Para endpoints de usuarios y unidades (ejemplo)"
     }
   ],
   "components": {
