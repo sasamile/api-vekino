@@ -75,11 +75,53 @@ npx prisma migrate dev
 ```
 
 
+### Construcción y ejecución con Docker
+
+#### Opción 1: Usando Docker Compose (Recomendado)
+
+```bash
+# Construir y ejecutar el contenedor
+docker-compose up -d --build
+
+# Ver logs
+docker-compose logs -f
+
+# Detener el contenedor
+docker-compose down
+```
+
+**Importante**: Asegúrate de tener un archivo `.env` en la raíz del proyecto con todas las variables de entorno necesarias.
+
+#### Opción 2: Usando Docker directamente
+
+```bash
+# Construir la imagen
 docker build -t nest-backend .
 
-echo "4️⃣ Corriendo contenedor..."
-docker run -d --name nest-backend --restart=always -p 3000:3000 nest-backend  
+# Ejecutar el contenedor con variables de entorno desde archivo .env
+docker run -d \
+  --name nest-backend \
+  --restart=always \
+  -p 3000:3000 \
+  --env-file .env \
+  nest-backend
 
+# O pasar las variables de entorno directamente
+docker run -d \
+  --name nest-backend \
+  --restart=always \
+  -p 3000:3000 \
+  -e DATABASE_URL="postgresql://user:password@host:26257/defaultdb?sslmode=require" \
+  -e BETTER_AUTH_URL="http://localhost:3000" \
+  -e BETTER_AUTH_SECRET="your-secret-key" \
+  -e AWS_REGION="us-east-1" \
+  -e AWS_ACCESS_KEY_ID="your-access-key-id" \
+  -e AWS_SECRET_ACCESS_KEY="your-secret-access-key" \
+  -e AWS_S3_BUCKET_NAME="your-bucket-name" \
+  nest-backend
+```
+
+**Nota**: El contenedor requiere que `DATABASE_URL` esté configurado. Si no se proporciona, el contenedor fallará al iniciar.
 
 Esto creará las tablas necesarias en la base de datos maestra, incluyendo el modelo `Condominio`.
 

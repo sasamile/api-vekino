@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  api-vekino:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nest-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - vekino-network
+
+networks:
+  vekino-network:
+    driver: bridge
