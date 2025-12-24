@@ -164,35 +164,81 @@ docker inspect api-vekino | grep -A 10 Health
 
 ## Configuración de Producción
 
-### 1. Configurar Nginx como Reverse Proxy (Opcional)
+### 1. Configurar Nginx como Reverse Proxy con SSL
 
-Si quieres usar Nginx como reverse proxy:
-
-```nginx
-server {
-    listen 80;
-    server_name tu-dominio.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### 2. Configurar SSL con Let's Encrypt (Opcional)
+Para configurar Nginx y SSL automáticamente, usa el script incluido:
 
 ```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d tu-dominio.com
+# Desde el directorio del proyecto
+cd ~/api-vekino
+sudo ./nginx/setup-nginx.sh tu-dominio.com
 ```
+
+Este script:
+- Instala Nginx y Certbot si no están instalados
+- Configura Nginx como reverse proxy para tu aplicación
+- Obtiene y configura certificados SSL de Let's Encrypt
+- Configura renovación automática de certificados
+- Redirige HTTP a HTTPS automáticamente
+
+#### Pasos manuales (si prefieres hacerlo manualmente):
+
+1. **Instalar Nginx y Certbot:**
+```bash
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
+
+2. **Copiar configuración de Nginx:**
+```bash
+cd ~/api-vekino
+sudo cp nginx/nginx.conf /etc/nginx/sites-available/api-vekino
+sudo sed -i "s/REPLACE_WITH_DOMAIN/tu-dominio.com/g" /etc/nginx/sites-available/api-vekino
+sudo sed -i "s/server_name _;/server_name tu-dominio.com;/g" /etc/nginx/sites-available/api-vekino
+sudo ln -s /etc/nginx/sites-available/api-vekino /etc/nginx/sites-enabled/
+sudo rm /etc/nginx/sites-enabled/default  # Remover configuración por defecto
+```
+
+3. **Verificar configuración:**
+```bash
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+4. **Obtener certificado SSL:**
+```bash
+sudo certbot --nginx -d tu-dominio.com --non-interactive --agree-tos --email tu-email@dominio.com --redirect
+```
+
+5. **Actualizar configuración con el dominio real:**
+```bash
+sudo sed -i "s/REPLACE_WITH_DOMAIN/tu-dominio.com/g" /etc/nginx/sites-available/api-vekino
+sudo systemctl reload nginx
+```
+
+6. **Configurar renovación automática:**
+```bash
+sudo systemctl enable certbot.timer
+sudo systemctl start certbot.timer
+```
+
+### 2. Configurar DNS
+
+Antes de obtener el certificado SSL, asegúrate de que tu dominio apunte a la IP de tu instancia EC2:
+
+1. Ve a tu proveedor de DNS (ej: Route 53, Cloudflare, etc.)
+2. Crea un registro A que apunte tu dominio a la IP pública de tu instancia EC2
+3. Espera a que se propague (puede tomar unos minutos)
+
+### 3. Configurar Security Groups en AWS
+
+Asegúrate de que los siguientes puertos estén abiertos en los Security Groups de tu instancia EC2:
+
+- **Puerto 80 (HTTP)**: Para Let's Encrypt y redirección a HTTPS
+- **Puerto 443 (HTTPS)**: Para tráfico SSL
+- **Puerto 22 (SSH)**: Para acceso remoto (ya debería estar abierto)
+
+El puerto 3000 NO necesita estar abierto públicamente, solo Nginx necesita acceder a él localmente.
 
 ### 3. Configurar Auto-inicio del Contenedor
 
@@ -276,5 +322,43 @@ docker system df
 
 - La base de datos CockroachDB debe estar configurada externamente
 - El servicio de S3 de AWS debe estar configurado y accesible
-- El puerto 3000 debe estar abierto en los grupos de seguridad de AWS si se accede desde fuera de la instancia
+- El puerto 3000 NO necesita estar abierto públicamente (solo Nginx lo usa localmente)
+- Los puertos 80 y 443 deben estar abiertos en los Security Groups para Nginx y SSL
+
+## Configuración de Nginx y SSL
+
+### Verificar estado de Nginx
+
+```bash
+sudo systemctl status nginx
+```
+
+### Ver logs de Nginx
+
+```bash
+# Logs de acceso
+sudo tail -f /var/log/nginx/api-vekino-access.log
+
+# Logs de errores
+sudo tail -f /var/log/nginx/api-vekino-error.log
+```
+
+### Renovar certificado SSL manualmente
+
+```bash
+sudo certbot renew
+```
+
+### Verificar renovación automática
+
+```bash
+sudo systemctl status certbot.timer
+```
+
+### Actualizar configuración de Nginx después de cambios
+
+```bash
+sudo nginx -t  # Verificar configuración
+sudo systemctl reload nginx  # Recargar sin interrumpir conexiones
+```
 
