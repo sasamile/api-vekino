@@ -74,6 +74,13 @@ Primero, aplica las migraciones a la base de datos maestra:
 npx prisma migrate dev
 ```
 
+
+docker build -t nest-backend .
+
+echo "4️⃣ Corriendo contenedor..."
+docker run -d --name nest-backend --restart=always -p 3000:3000 nest-backend  
+
+
 Esto creará las tablas necesarias en la base de datos maestra, incluyendo el modelo `Condominio`.
 
 ## Compile and run the project
