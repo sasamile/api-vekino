@@ -35,8 +35,12 @@ fi
 
 echo -e "${GREEN}✅ Verificaciones completadas${NC}"
 
+# Habilitar BuildKit para builds más rápidos
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
 # Construir la imagen
-echo -e "\n${YELLOW}📦 Construyendo la imagen Docker...${NC}"
+echo -e "\n${YELLOW}📦 Construyendo la imagen Docker (con BuildKit para acelerar)...${NC}"
 docker-compose build
 
 # Detener contenedores existentes (si existen)
