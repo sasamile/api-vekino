@@ -12,11 +12,20 @@ COPY prisma.config.ts ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
 
-# Instalar dependencias con cache mount (MUY RÁPIDO en builds siguientes)
+# Configurar npm para máxima velocidad y confiabilidad
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-retries 3 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retry-maxtimeout 60000 && \
+    npm config set fetch-timeout 120000 && \
+    npm config set progress false && \
+    npm config set loglevel warn
+
+# Instalar dependencias con cache mount (npm install es más tolerante que npm ci)
 RUN --mount=type=cache,target=/root/.npm \
-    npm config set fetch-retries 2 && \
-    npm config set fetch-timeout 60000 && \
-    npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline
+    npm install --legacy-peer-deps --no-audit --no-fund --prefer-offline || \
+    (echo "⚠️  Reintentando instalación..." && sleep 10 && npm install --legacy-peer-deps --no-audit --no-fund) || \
+    (echo "⚠️  Último intento..." && sleep 20 && npm install --legacy-peer-deps --no-audit --no-fund --force)
 
 # Copiar código fuente y esquemas
 COPY prisma ./prisma
