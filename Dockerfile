@@ -14,8 +14,17 @@ COPY tsconfig*.json ./
 COPY nest-cli.json ./
 COPY prisma.config.ts ./
 
+# Configurar npm para manejar mejor problemas de red
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-timeout 300000
+
 # Instalar dependencias (usar --legacy-peer-deps para resolver conflictos de peer dependencies)
-RUN npm ci --legacy-peer-deps
+# Reintentar hasta 3 veces en caso de error de red
+RUN npm ci --legacy-peer-deps || \
+    (sleep 10 && npm ci --legacy-peer-deps) || \
+    (sleep 20 && npm ci --legacy-peer-deps)
 
 # Copiar el código fuente y esquemas de Prisma
 COPY prisma ./prisma
@@ -43,8 +52,18 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copiar archivos de configuración de dependencias
 COPY package*.json ./
 
+# Configurar npm para manejar mejor problemas de red
+RUN npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-timeout 300000
+
 # Instalar solo dependencias de producción (usar --legacy-peer-deps para resolver conflictos)
-RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
+# Reintentar hasta 3 veces en caso de error de red
+RUN npm ci --omit=dev --legacy-peer-deps || \
+    (sleep 10 && npm ci --omit=dev --legacy-peer-deps) || \
+    (sleep 20 && npm ci --omit=dev --legacy-peer-deps) && \
+    npm cache clean --force
 
 # Copiar archivos compilados desde la etapa de build
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
