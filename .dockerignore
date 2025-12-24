@@ -3,11 +3,11 @@ node_modules
 npm-debug.log
 yarn-error.log
 
-# Build outputs
+# Build output (se copiará desde la etapa de build)
 dist
-*.tsbuildinfo
+generated
 
-# Archivos de entorno (se pasan como variables)
+# Archivos de entorno
 .env
 .env.local
 .env.*.local
@@ -28,25 +28,23 @@ dist
 .DS_Store
 Thumbs.db
 
-# Testing
+# Tests
 coverage
 .nyc_output
-test
+*.test.ts
 *.spec.ts
-*.e2e-spec.ts
+test
 
 # Documentación
 README.md
 docs
-*.md
 
 # Docker
 Dockerfile
-docker-compose*.yml
+docker-compose.yml
 .dockerignore
 
 # Otros
 *.log
-.cache
 .temp
-
+.tmp
