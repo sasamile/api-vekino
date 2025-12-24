@@ -22,7 +22,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 
 @ApiTags('auth')
-@Controller('auth/superadmin')
+@Controller('superadmin')
 @AllowAnonymous() // Permitir acceso sin autenticación para estos endpoints
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -35,7 +35,7 @@ export class AuthController {
 
 **Ejemplo de uso con curl:**
 \`\`\`bash
-curl --location 'http://localhost:3000/auth/superadmin/register' \\
+curl --location 'http://localhost:3000/api/superadmin/register' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{
     "email": "nspes2020@gmail.com",
@@ -91,7 +91,7 @@ curl --location 'http://localhost:3000/auth/superadmin/register' \\
 
 **Ejemplo de uso con curl:**
 \`\`\`bash
-curl --location 'http://localhost:3000/auth/superadmin/login' \\
+curl --location 'http://localhost:3000/api/superadmin/login' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{
     "email": "nspes2020@gmail.com",
