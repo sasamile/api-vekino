@@ -1,51 +1,65 @@
-FROM node:24-alpine
+# Dockerfile multi-stage para optimizar el tamaño de la imagen
 
-# Instalar dependencias del sistema necesarias
+# Etapa 1: Build - Compilar la aplicación
+FROM node:20-alpine AS builder
+
+# Instalar dependencias del sistema necesarias para Prisma y Sharp
 RUN apk add --no-cache libc6-compat openssl
 
-# Crear carpeta de trabajo
 WORKDIR /app
 
-# Copiar package.json e instalar dependencias
+# Copiar archivos de configuración de dependencias
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+COPY tsconfig*.json ./
+COPY nest-cli.json ./
+COPY prisma.config.ts ./
 
-# Copiar el resto del código
-COPY . .
+# Instalar dependencias (usar --legacy-peer-deps para resolver conflictos de peer dependencies)
+RUN npm ci --legacy-peer-deps
 
-# Generar el cliente Prisma
+# Copiar el código fuente y esquemas de Prisma
+COPY prisma ./prisma
+COPY src ./src
+COPY scripts ./scripts
+
+# Generar el cliente de Prisma
 RUN npx prisma generate
 
-# Compilar la app (NestJS usa TypeScript)
+# Compilar la aplicación
 RUN npm run build
 
-# Crear script de inicio
-RUN echo '#!/bin/sh' > /app/start.sh && \
-    echo 'set -e' >> /app/start.sh && \
-    echo 'echo "🚀 Iniciando API Vekino..."' >> /app/start.sh && \
-    echo '# Limpiar comillas de todas las variables de entorno si las tienen' >> /app/start.sh && \
-    echo 'clean_env_var() {' >> /app/start.sh && \
-    echo '  eval "value=\$$1"' >> /app/start.sh && \
-    echo '  if [ ! -z "$value" ]; then' >> /app/start.sh && \
-    echo '    cleaned=$(echo "$value" | sed "s/^[\"'\'']//; s/[\"'\'']$//")' >> /app/start.sh && \
-    echo '    export "$1=$cleaned"' >> /app/start.sh && \
-    echo '  fi' >> /app/start.sh && \
-    echo '}' >> /app/start.sh && \
-    echo 'clean_env_var DATABASE_URL' >> /app/start.sh && \
-    echo 'clean_env_var BETTER_AUTH_URL' >> /app/start.sh && \
-    echo 'clean_env_var BETTER_AUTH_SECRET' >> /app/start.sh && \
-    echo 'if [ -z "$DATABASE_URL" ]; then' >> /app/start.sh && \
-    echo '  echo "❌ Error: DATABASE_URL no está configurada"' >> /app/start.sh && \
-    echo '  exit 1' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "🔄 Ejecutando migraciones de Prisma..."' >> /app/start.sh && \
-    echo 'npx prisma migrate deploy || echo "⚠️  Advertencia: Error en migraciones (puede ser normal si ya están aplicadas)"' >> /app/start.sh && \
-    echo 'echo "🎯 Iniciando aplicación..."' >> /app/start.sh && \
-    echo 'exec node dist/src/main.js' >> /app/start.sh && \
-    chmod +x /app/start.sh
+# Etapa 2: Producción - Imagen final optimizada
+FROM node:20-alpine AS production
 
-# Exponer el puerto
+# Instalar dependencias del sistema necesarias para Prisma y Sharp
+RUN apk add --no-cache libc6-compat openssl
+
+WORKDIR /app
+
+# Crear usuario no root para seguridad
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nestjs
+
+# Copiar archivos de configuración de dependencias
+COPY package*.json ./
+
+# Instalar solo dependencias de producción (usar --legacy-peer-deps para resolver conflictos)
+RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
+
+# Copiar archivos compilados desde la etapa de build
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/generated ./generated
+COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+
+# Cambiar al usuario no root
+USER nestjs
+
+# Exponer el puerto de la aplicación
 EXPOSE 3000
 
-# Comando para ejecutar la app
-CMD ["/app/start.sh"]
+# Variable de entorno para Node.js
+ENV NODE_ENV=production
+
+# Comando para iniciar la aplicación
+CMD ["node", "dist/src/main.js"]
+

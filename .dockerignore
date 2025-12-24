@@ -2,20 +2,23 @@
 node_modules
 npm-debug.log
 yarn-error.log
+yarn.lock
 
-# Build output (se copiará desde la etapa de build)
+# Build outputs
 dist
-generated
+build
+coverage
+*.tsbuildinfo
 
-# Archivos de entorno
+# Prisma generated
+generated/prisma
+
+# Environment files
 .env
 .env.local
-.env.*.local
-
-# Git
-.git
-.gitignore
-.gitattributes
+.env.development.local
+.env.test.local
+.env.production.local
 
 # IDE
 .vscode
@@ -28,23 +31,39 @@ generated
 .DS_Store
 Thumbs.db
 
-# Tests
-coverage
-.nyc_output
-*.test.ts
-*.spec.ts
-test
-
-# Documentación
-README.md
-docs
+# Git
+.git
+.gitignore
+.gitattributes
 
 # Docker
 Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Otros
+# Documentation
+README.md
+docs
+*.md
+
+# Tests
+test
+*.spec.ts
+*.test.ts
+jest.config.js
+jest-e2e.json
+
+# Logs
+logs
 *.log
-.temp
+
+# Temporary files
 .tmp
+.temp
+*.tmp
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
