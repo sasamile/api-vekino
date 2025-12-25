@@ -17,7 +17,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Exponer el puerto
-EXPOSE 3000
+EXPOSE 3001
 
 # Ejecutar aplicación
 CMD ["node", "dist/src/main.js"]
