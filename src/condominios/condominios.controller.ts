@@ -1019,13 +1019,18 @@ curl --location 'http://condominio-las-flores.localhost:3000/condominios/login' 
       // Configurar sameSite según el contexto
       if (isProduction) {
         cookieOptions.secure = true; // En producción siempre usar secure (HTTPS)
-        if (isExactSameDomain || isSameDomainBase) {
+        // En producción, si estamos estableciendo un dominio base (ej: .vekino.site),
+        // significa que queremos compartir cookies entre subdominios, usar 'lax'
+        const parts = normalizedBackendHost.split('.');
+        const hasDomainBase = parts.length >= 2;
+        if (isExactSameDomain || isSameDomainBase || hasDomainBase) {
           // Mismo dominio o mismo dominio base - usar 'lax' (mejor para cookies compartidas)
           cookieOptions.sameSite = 'lax';
-          console.log('✅ Producción: Mismo dominio base detectado');
+          console.log('✅ Producción: Configurando SameSite=Lax para compartir cookies entre subdominios');
           console.log('   Backend:', normalizedBackendHost);
-          console.log('   Frontend:', cleanOriginHost);
-          console.log('   ✅ Usando SameSite=Lax para compartir cookies entre subdominios');
+          if (cleanOriginHost) {
+            console.log('   Frontend:', cleanOriginHost);
+          }
         } else {
           // Cross-origin en producción - usar 'none' con 'secure'
           cookieOptions.sameSite = isCrossOrigin ? 'none' : 'lax';
@@ -1055,42 +1060,30 @@ curl --location 'http://condominio-las-flores.localhost:3000/condominios/login' 
       // IMPORTANTE: 
       // - En desarrollo: Chrome rechaza cookies con Domain=.localhost, NO establecer domain
       // - En producción: Establecer domain para compartir entre subdominios del mismo dominio base
-      //   Ejemplo: api.eduamidsoft.com y app.eduamidsoft.com comparten cookies con domain=.eduamidsoft.com
+      //   Ejemplo: api-condominio-las-flores.vekino.site → domain=.vekino.site
       if (isProduction && normalizedBackendHost.includes('.')) {
-        if (isSameDomainBase) {
-          // Compartir cookies entre subdominios del mismo dominio base
-          const parts = normalizedBackendHost.split('.');
-          if (parts.length >= 2) {
-            // Usar los últimos dos segmentos (ej: .eduamidsoft.com)
-            cookieOptions.domain = '.' + parts.slice(-2).join('.');
-            console.log('✅ Producción: Dominio establecido para compartir cookies:', cookieOptions.domain);
-            console.log('   Esto permite compartir cookies entre subdominios del mismo dominio base');
-            console.log('   Ejemplo: api.eduamidsoft.com ↔ app.eduamidsoft.com');
-            console.log('   Ejemplo: api-condominio.eduamidsoft.com ↔ condominio.eduamidsoft.com');
-          }
-        } else if (isExactSameDomain) {
-          // Mismo dominio exacto en producción - no establecer domain (funcionará automáticamente)
-          console.log('✅ Producción: Mismo dominio exacto - no se necesita domain');
+        // En producción, siempre establecer el dominio base para compartir cookies entre subdominios
+        const parts = normalizedBackendHost.split('.');
+        if (parts.length >= 2) {
+          // Usar los últimos dos segmentos (ej: .vekino.site)
+          cookieOptions.domain = '.' + parts.slice(-2).join('.');
+          console.log('✅ Producción: Dominio establecido para compartir cookies:', cookieOptions.domain);
+          console.log('   Host del backend:', normalizedBackendHost);
+          console.log('   Esto permite compartir cookies entre todos los subdominios de', cookieOptions.domain);
+          console.log('   Ejemplo: api-condominio-las-flores.vekino.site ↔ condominio-las-flores.vekino.site');
         }
       } else if (normalizedBackendHost.includes('.localhost') && !normalizedBackendHost.startsWith('localhost')) {
-        // En desarrollo con .localhost
-        if (isExactSameDomain) {
-          console.log('✅ Desarrollo: Mismo dominio exacto detectado');
-          console.log('   Backend:', normalizedBackendHost + ':3000');
-          console.log('   Frontend:', cleanOriginHost + ':3001');
-          console.log('   ✅ Las cookies funcionarán correctamente y persistirán');
-          console.log('   ✅ No se necesita configurar domain - mismo dominio, diferente puerto');
-          // NO establecer domain - no es necesario y Chrome lo rechazaría
-        } else {
-          console.log('⚠️  Desarrollo: NO estableciendo domain para evitar rechazo de Chrome');
-          console.log('   Chrome rechaza cookies con Domain=.localhost');
-          console.log('   La cookie será específica de:', normalizedBackendHost);
-          console.log('   📋 SOLUCIÓN: El frontend debe usar el mismo dominio exacto que el backend');
-          console.log('   Ejemplo: Si el backend es condominio-las-flores.localhost:3000,');
-          console.log('            el frontend debe ser condominio-las-flores.localhost:3001');
-          console.log('   💡 Alternativa: Configurar un proxy en el frontend');
-          // NO establecer domain
-        }
+        // En desarrollo con .localhost - intentar establecer dominio para compartir entre subdominios
+        // NOTA: Los navegadores modernos (Chrome, Firefox) rechazan Domain=.localhost por seguridad
+        // Si el navegador rechaza el dominio, la cookie se guardará solo para el dominio exacto
+        cookieOptions.domain = '.localhost';
+        console.log('✅ Desarrollo: Intentando establecer dominio para compartir cookies:', cookieOptions.domain);
+        console.log('   Host del backend:', normalizedBackendHost);
+        console.log('   ⚠️  IMPORTANTE: Los navegadores modernos rechazan Domain=.localhost por seguridad');
+        console.log('   Si el navegador rechaza el dominio, la cookie se guardará solo para:', normalizedBackendHost);
+        console.log('   💡 SOLUCIÓN: El frontend debe usar el mismo dominio exacto que el backend');
+        console.log('   Ejemplo: Backend: api-condominio-las-flores.localhost:3000');
+        console.log('            Frontend: api-condominio-las-flores.localhost:3001 (mismo dominio, diferente puerto)');
       } else if (normalizedBackendHost === 'localhost') {
         console.log('ℹ️  localhost detectado (sin subdominio)');
         console.log('   La cookie solo funcionará en localhost');
