@@ -35,7 +35,7 @@ export class AuthController {
 
 **Ejemplo de uso con curl:**
 \`\`\`bash
-curl --location 'http://localhost:3000/api/superadmin/register' \\
+curl --location 'http://localhost:3000/superadmin/register' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{
     "email": "nspes2020@gmail.com",
@@ -91,7 +91,7 @@ curl --location 'http://localhost:3000/api/superadmin/register' \\
 
 **Ejemplo de uso con curl:**
 \`\`\`bash
-curl --location 'http://localhost:3000/api/superadmin/login' \\
+curl --location 'http://localhost:3000/superadmin/login' \\
 --header 'Content-Type: application/json' \\
 --data-raw '{
     "email": "nspes2020@gmail.com",

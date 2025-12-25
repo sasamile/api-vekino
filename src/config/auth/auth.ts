@@ -14,7 +14,7 @@ export const auth = betterAuth({
     requireEmailVerification: false, // Puedes cambiar esto a true si quieres verificación de email
   },
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
-  basePath: "/api/auth", // Ruta base para Better Auth (debe coincidir con el prefijo global)
+  basePath: "/auth", // Ruta base para Better Auth
   secret: process.env.BETTER_AUTH_SECRET || "better-auth-secret-change-in-production",
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "http://localhost:3000",

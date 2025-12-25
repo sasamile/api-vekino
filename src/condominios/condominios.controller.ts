@@ -1187,7 +1187,7 @@ curl --location 'http://condominio-las-flores.localhost:3000/condominios/login' 
           console.log('   Ejemplo: Backend: condominio-las-flores.localhost:3000');
           console.log('            Frontend: condominio-las-flores.localhost:3001 (mismo dominio, diferente puerto)');
           console.log('   💡 Alternativa: Configurar proxy en el frontend');
-          console.log('      server: { proxy: { "/api": "http://condominio-las-flores.localhost:3000" } }');
+          console.log('      server: { proxy: { "/": "http://condominio-las-flores.localhost:3000" } }');
         } else if (isSameDomainBase && isProduction) {
           console.log('✅ Producción: Frontend y backend en subdominios del mismo dominio base');
           console.log('   La cookie se compartirá automáticamente gracias a domain=' + cookieOptions.domain);

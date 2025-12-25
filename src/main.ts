@@ -30,11 +30,10 @@ async function bootstrap() {
   // Interceptor global para serializar BigInt a Number (necesario para CockroachDB)
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
 
-  // Prefijo global /api para todos los endpoints (después de interceptores pero antes de Swagger)
-  // Excluir Swagger del prefijo para evitar conflictos con Better Auth
-  app.setGlobalPrefix('api', {
-    exclude: ['docs', 'docs-json'],
-  });
+  // Prefijo global removido - las rutas están directamente en la raíz
+  // app.setGlobalPrefix('api', {
+  //   exclude: ['docs', 'docs-json'],
+  // });
 
   // Si tendrás frontend separado, habilita CORS con credentials:
   // Permitir cualquier subdominio de localhost para desarrollo
@@ -81,21 +80,21 @@ Esta API utiliza un sistema de subdominios para identificar condominios. Los end
 - **Producción**: \`https://condominio-las-flores.tudominio.com\`
 
 ### Endpoints que requieren subdominio:
-- Todos los endpoints bajo \`/api/condominios/users\` (excepto \`/api/condominios/login\`)
-- Todos los endpoints bajo \`/api/unidades\`
-- \`GET /api/condominios/config\`
+- Todos los endpoints bajo \`/condominios/users\` (excepto \`/condominios/login\`)
+- Todos los endpoints bajo \`/unidades\`
+- \`GET /condominios/config\`
 
 ### Endpoints que NO requieren subdominio:
-- \`POST /api/superadmin/*\` - Autenticación de superadministradores
-- \`POST /api/condominios\` - Crear condominio (requiere SUPERADMIN)
-- \`GET /api/condominios\` - Listar todos los condominios
-- \`GET /api/condominios/{id}\` - Obtener condominio por ID
-- \`POST /api/condominios/login\` - Login de usuarios (detecta subdominio automáticamente)
-- \`GET /api/condominios/validate-subdomain/{subdomain}\` - Validar subdominio
+- \`POST /superadmin/*\` - Autenticación de superadministradores
+- \`POST /condominios\` - Crear condominio (requiere SUPERADMIN)
+- \`GET /condominios\` - Listar todos los condominios
+- \`GET /condominios/{id}\` - Obtener condominio por ID
+- \`POST /condominios/login\` - Login de usuarios (detecta subdominio automáticamente)
+- \`GET /condominios/validate-subdomain/{subdomain}\` - Validar subdominio
 
 ### Autenticación:
-- **Superadministradores**: Usan \`/api/superadmin/login\` y obtienen un token JWT
-- **Usuarios de condominios**: Usan \`/api/condominios/login\` y obtienen una cookie de sesión
+- **Superadministradores**: Usan \`/superadmin/login\` y obtienen un token JWT
+- **Usuarios de condominios**: Usan \`/condominios/login\` y obtienen una cookie de sesión
 - Las cookies de sesión funcionan solo en el subdominio específico del condominio`
     )
     .setVersion("1.0")
@@ -116,8 +115,8 @@ Esta API utiliza un sistema de subdominios para identificar condominios. Los end
       name: "better-auth.session_token",
       description: "Cookie de sesión de Better Auth",
     })
-    .addServer("http://localhost:3000/api", "Servidor base (sin subdominio) - Para endpoints de superadmin y creación de condominios")
-    .addServer("http://condominio-las-flores.localhost:3000/api", "Servidor con subdominio - Para endpoints de usuarios y unidades (ejemplo)")
+    .addServer("http://localhost:3000", "Servidor base (sin subdominio) - Para endpoints de superadmin y creación de condominios")
+    .addServer("http://condominio-las-flores.localhost:3000", "Servidor con subdominio - Para endpoints de usuarios y unidades (ejemplo)")
     .addTag("auth", "Autenticación - Endpoints de autenticación de superadministradores")
     .addTag("condominios", "Condominios - Gestión de condominios")
     .addTag("condominios-users", "Condominios - Usuarios - Gestión de usuarios de condominios")
