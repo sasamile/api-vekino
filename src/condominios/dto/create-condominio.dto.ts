@@ -98,22 +98,8 @@ export class CreateCondominioDto {
 
   // Configuración de Acceso y Dominio
   @ApiPropertyOptional({
-    description: 'Subdominio usado por el frontend (ej: condominio-las-flores). Solo letras minúsculas, números y guiones',
+    description: 'Subdominio único para acceso (frontend y backend usan el mismo subdominio). Si no se proporciona, se genera automáticamente desde el nombre. Solo letras minúsculas, números y guiones',
     example: 'condominio-las-flores',
-    pattern: '^[a-z0-9-]+$',
-  })
-  @IsString()
-  @IsOptional()
-  @MinLength(3)
-  @Matches(/^[a-z0-9-]+$/, {
-    message:
-      'El subdominio del frontend solo puede contener letras minúsculas, números y guiones',
-  })
-  frontSubdomain?: string; // Subdominio usado por el frontend (ej: condominio-las-flores)
-
-  @ApiPropertyOptional({
-    description: 'Subdominio único para acceso (opcional, se genera automáticamente desde frontSubdomain)',
-    example: 'condominio1',
     pattern: '^[a-z0-9-]+$',
   })
   @IsString()
@@ -122,7 +108,7 @@ export class CreateCondominioDto {
   @Matches(/^[a-z0-9-]+$/, {
     message: 'El subdominio solo puede contener letras minúsculas, números y guiones',
   })
-  subdomain?: string; // Opcional: se genera automáticamente desde frontSubdomain
+  subdomain?: string; // Subdominio único para acceso (frontend y backend usan el mismo)
 
   @ApiPropertyOptional({
     description: 'URL del logo (se genera automáticamente al subir imagen)',

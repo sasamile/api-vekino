@@ -46,18 +46,9 @@ export class UpdateCondominioDto {
   @IsOptional()
   @MinLength(3)
   @Matches(/^[a-z0-9-]+$/, {
-    message:
-      'El subdominio del frontend solo puede contener letras minúsculas, números y guiones',
-  })
-  frontSubdomain?: string;
-
-  @IsString()
-  @IsOptional()
-  @MinLength(3)
-  @Matches(/^[a-z0-9-]+$/, {
     message: 'El subdominio solo puede contener letras minúsculas, números y guiones',
   })
-  subdomain?: string;
+  subdomain?: string; // Subdominio único para acceso (frontend y backend usan el mismo)
 
   @IsString()
   @IsOptional()

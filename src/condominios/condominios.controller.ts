@@ -78,7 +78,7 @@ curl --location 'http://localhost:3000/condominios' \\
 --form 'city="Bogotá"' \\
 --form 'country="Colombia"' \\
 --form 'timezone="AMERICA_BOGOTA"' \\
---form 'frontSubdomain="condominio-las-flores"' \\
+--form 'subdomain="condominio-las-flores"' \\
 --form 'primaryColor="#3B82F6"' \\
 --form 'subscriptionPlan="BASICO"' \\
 --form 'unitLimit="100"' \\
@@ -102,8 +102,7 @@ curl --location 'http://localhost:3000/condominios' \\
       address: 'Calle 123 #45-67',
       city: 'Bogotá',
       country: 'Colombia',
-      frontSubdomain: 'las-flores',
-      subdomain: 'condominio1',
+      subdomain: 'condominio-las-flores',
       logo: 'https://example.com/logo.png',
       primaryColor: '#3B82F6',
       createdAt: '2024-01-15T10:30:00.000Z',
@@ -172,8 +171,7 @@ curl --location 'http://localhost:3000/condominios' \\
         address: 'Calle 123 #45-67',
         city: 'Bogotá',
         country: 'Colombia',
-        frontSubdomain: 'las-flores',
-        subdomain: 'condominio1',
+        subdomain: 'condominio-las-flores',
         logo: 'https://example.com/logo.png',
         primaryColor: '#3B82F6',
         createdAt: '2024-01-15T10:30:00.000Z',
@@ -652,6 +650,66 @@ curl --location --request DELETE 'http://condominio-las-flores.localhost:3000/co
     );
   }
 
+  // Ruta para SUPERADMIN: crear usuario especificando el ID del condominio en la URL
+  // Esta ruta va después de las rutas específicas de 'users' pero antes de las rutas genéricas con :id
+  @ApiTags('condominios-users')
+  @Post(':condominioId/users')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(RoleGuard)
+  @RequireRole('SUPERADMIN')
+  @ApiOperation({
+    summary: 'Crear un nuevo usuario en el condominio (solo SUPERADMIN)',
+    description: `Crea un nuevo usuario en un condominio específico. Solo disponible para SUPERADMIN.
+Requiere especificar el ID del condominio en la URL.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://localhost:3000/condominios/{condominioId}/users' \\
+--header 'Content-Type: application/json' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI' \\
+--data-raw '{
+    "name": "Juan Pérez",
+    "email": "juan.perez@email.com",
+    "password": "Password123",
+    "role": "ADMIN",
+    "firstName": "Juan",
+    "lastName": "Pérez"
+}'
+\`\`\``,
+  })
+  @ApiParam({
+    name: 'condominioId',
+    description: 'ID único del condominio',
+    example: '9920348c-08c1-4078-b389-bfebb2287a3b',
+  })
+  @ApiBody({ type: CreateCondominioUserDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 201,
+    description: 'Usuario creado exitosamente',
+    type: CondominioUserResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Condominio no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN',
+  })
+  async createUserByCondominioId(
+    @Param('condominioId') condominioId: string,
+    @Body() createUserDto: CreateCondominioUserDto,
+    @Req() req: Request,
+  ) {
+    return this.condominiosUsersService.createUserInCondominio(
+      condominioId,
+      createUserDto,
+      req,
+    );
+  }
+
   @ApiTags('condominios')
   @Get(':id')
   @UseGuards(RoleGuard)
@@ -819,7 +877,7 @@ curl --location --request DELETE 'http://condominio-las-flores.localhost:3000/co
     schema: {
       example: {
         available: true,
-        message: 'Subdominio disponible',
+        subdomain: 'condominio-las-flores',
       },
     },
   })

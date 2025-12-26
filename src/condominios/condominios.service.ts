@@ -45,43 +45,15 @@ export class CondominiosService {
   }
 
   /**
-   * Genera un subdominio de frontend único basado en el nombre
+   * Genera un subdominio único basado en el nombre o subdominio proporcionado
    * Si ya existe, agrega un número al final
    */
-  private async generateUniqueFrontSubdomain(
+  private async generateUniqueSubdomain(
     baseName: string,
     excludeId?: string,
   ): Promise<string> {
     const normalized = this.normalizeName(baseName);
-    let frontSubdomain = normalized;
-    let counter = 1;
-
-    while (true) {
-      const existing = await this.masterPrisma.condominio.findUnique({
-        where: { frontSubdomain },
-      });
-
-      if (!existing || existing.id === excludeId) {
-        return frontSubdomain;
-      }
-
-      // Si existe, agregar un número
-      frontSubdomain = `${normalized}-${counter}`;
-      counter++;
-    }
-  }
-
-  /**
-   * Genera un subdominio de API único basado en un subdominio de frontend
-   * Si ya existe, agrega un número al final
-   */
-  private async generateUniqueApiSubdomain(
-    baseSubdomain: string,
-    excludeId?: string,
-  ): Promise<string> {
-    const normalized = this.normalizeName(baseSubdomain);
-    const base = normalized.startsWith('api-') ? normalized : `api-${normalized}`;
-    let subdomain = base;
+    let subdomain = normalized;
     let counter = 1;
 
     while (true) {
@@ -94,7 +66,7 @@ export class CondominiosService {
       }
 
       // Si existe, agregar un número
-      subdomain = `${base}-${counter}`;
+      subdomain = `${normalized}-${counter}`;
       counter++;
     }
   }
@@ -132,33 +104,25 @@ export class CondominiosService {
     dto: CreateCondominioDto,
     logoFile?: Express.Multer.File,
   ) {
-    // Determinar subdominio de frontend
-    const providedFront = dto.frontSubdomain
-      ? this.normalizeName(dto.frontSubdomain)
-      : null;
+    // Determinar subdominio (frontend y backend usan el mismo)
+    let subdomain: string;
 
-    let frontSubdomain = providedFront;
-
-    if (providedFront) {
-      const existingFront = await this.masterPrisma.condominio.findUnique({
-        where: { frontSubdomain: providedFront },
+    if (dto.subdomain) {
+      const normalized = this.normalizeName(dto.subdomain);
+      const existing = await this.masterPrisma.condominio.findUnique({
+        where: { subdomain: normalized },
       });
 
-      if (existingFront) {
+      if (existing) {
         throw new BadRequestException(
-          `Ya existe un condominio con el subdominio de frontend: ${providedFront}`,
+          `Ya existe un condominio con el subdominio: ${normalized}`,
         );
       }
+      subdomain = normalized;
     } else {
-      // Generar subdominio de frontend automáticamente si no se proporciona
-      frontSubdomain = await this.generateUniqueFrontSubdomain(dto.name);
+      // Generar subdominio automáticamente desde el nombre si no se proporciona
+      subdomain = await this.generateUniqueSubdomain(dto.name);
     }
-
-    // Subdominio del backend (API) derivado del frontend
-    const desiredApiSubdomain = `api-${frontSubdomain}`;
-    const subdomain = dto.subdomain
-      ? this.normalizeName(dto.subdomain)
-      : await this.generateUniqueApiSubdomain(desiredApiSubdomain);
 
     // Generar nombre de base de datos automáticamente si no se proporciona
     const databaseName = dto.databaseName || await this.generateUniqueDatabaseName(dto.name);
@@ -236,7 +200,6 @@ export class CondominiosService {
       const condominio = await this.masterPrisma.condominio.create({
         data: {
           name: dto.name,
-          frontSubdomain: frontSubdomain,
           subdomain: subdomain,
           databaseName: databaseName,
           databaseUrl: condominioDatabaseUrl,
@@ -353,16 +316,9 @@ export class CondominiosService {
    * Retorna el condominio completo (incluye campos sensibles) para uso interno
    */
   async findCondominioBySubdomain(subdomain: string) {
-    let condominio = await this.masterPrisma.condominio.findUnique({
+    const condominio = await this.masterPrisma.condominio.findUnique({
       where: { subdomain },
     });
-
-    // Si no se encuentra por el subdominio de API, intentar por el subdominio de frontend
-    if (!condominio) {
-      condominio = await this.masterPrisma.condominio.findUnique({
-        where: { frontSubdomain: subdomain },
-      });
-    }
 
     if (!condominio) {
       throw new NotFoundException(
@@ -400,44 +356,23 @@ export class CondominiosService {
   ) {
     const existingCondominio = await this.findOne(id);
 
-    // Calcular subdominios efectivos
-    let effectiveFrontSubdomain = existingCondominio.frontSubdomain || null;
+    // Determinar subdominio efectivo
     let effectiveSubdomain = existingCondominio.subdomain || null;
 
-    // Si se actualiza el subdominio de frontend, normalizar y validar
-    if (dto.frontSubdomain !== undefined) {
-      const normalizedFront = this.normalizeName(dto.frontSubdomain);
-      const existingFront = await this.masterPrisma.condominio.findUnique({
-        where: { frontSubdomain: normalizedFront },
-      });
-
-      if (existingFront && existingFront.id !== id) {
-        throw new BadRequestException(
-          `Ya existe un condominio con el subdominio de frontend: ${normalizedFront}`,
-        );
-      }
-
-      effectiveFrontSubdomain = normalizedFront;
-      effectiveSubdomain = await this.generateUniqueApiSubdomain(
-        `api-${normalizedFront}`,
-        id,
-      );
-    }
-
-    // Si se actualiza el subdominio de API explícitamente, verificar que sea único
-    if (dto.subdomain && dto.subdomain !== effectiveSubdomain) {
-      const normalizedApi = this.normalizeName(dto.subdomain);
+    // Si se actualiza el subdominio, normalizar y validar
+    if (dto.subdomain !== undefined) {
+      const normalized = this.normalizeName(dto.subdomain);
       const existing = await this.masterPrisma.condominio.findUnique({
-        where: { subdomain: normalizedApi },
+        where: { subdomain: normalized },
       });
 
-      if (existing) {
+      if (existing && existing.id !== id) {
         throw new BadRequestException(
-          `Ya existe un condominio con el subdominio: ${normalizedApi}`,
+          `Ya existe un condominio con el subdominio: ${normalized}`,
         );
       }
 
-      effectiveSubdomain = normalizedApi;
+      effectiveSubdomain = normalized;
     }
 
     // Procesar y subir logo si se proporciona
@@ -471,8 +406,6 @@ export class CondominiosService {
     if (dto.city !== undefined) updateData.city = dto.city;
     if (dto.country !== undefined) updateData.country = dto.country;
     if (dto.timezone !== undefined) updateData.timezone = dto.timezone;
-    if (effectiveFrontSubdomain !== null)
-      updateData.frontSubdomain = effectiveFrontSubdomain;
     if (effectiveSubdomain !== null) updateData.subdomain = effectiveSubdomain;
     if (logoUrl !== undefined) updateData.logo = logoUrl;
     if (dto.primaryColor !== undefined) updateData.primaryColor = dto.primaryColor;
@@ -503,41 +436,31 @@ export class CondominiosService {
       logo: condominioData.logo,
       primaryColor: condominioData.primaryColor || '#3B82F6',
       name: condominioData.name,
-      frontSubdomain: condominioData.frontSubdomain,
       subdomain: condominioData.subdomain,
     };
   }
 
   /**
-   * Valida si un subdominio de frontend está disponible y calcula el de API
+   * Valida si un subdominio está disponible
    */
   async validateSubdomain(
-    frontSubdomainCandidate: string,
-  ): Promise<{ available: boolean; frontSubdomain: string; apiSubdomain: string }> {
-    const normalizedFront = this.normalizeName(frontSubdomainCandidate);
+    subdomainCandidate: string,
+  ): Promise<{ available: boolean; subdomain: string }> {
+    const normalized = this.normalizeName(subdomainCandidate);
 
-    const suggestedFront = await this.generateUniqueFrontSubdomain(normalizedFront);
-    const suggestedApi = await this.generateUniqueApiSubdomain(`api-${suggestedFront}`);
+    const suggested = await this.generateUniqueSubdomain(normalized);
 
-    const isSameFront = suggestedFront === normalizedFront;
-    const isApiAvailable =
+    const isSame = suggested === normalized;
+    const isAvailable =
       (
         await this.masterPrisma.condominio.findUnique({
-          where: { subdomain: `api-${normalizedFront}` },
-        })
-      ) === null;
-
-    const isFrontAvailable =
-      (
-        await this.masterPrisma.condominio.findUnique({
-          where: { frontSubdomain: normalizedFront },
+          where: { subdomain: normalized },
         })
       ) === null;
 
     return {
-      available: isFrontAvailable && isApiAvailable,
-      frontSubdomain: isSameFront ? normalizedFront : suggestedFront,
-      apiSubdomain: suggestedApi,
+      available: isAvailable && isSame,
+      subdomain: suggested,
     };
   }
 

@@ -38,14 +38,8 @@ export class CondominioResponseDto {
   country?: string;
 
   @ApiPropertyOptional({
-    description: 'Subdominio del frontend',
-    example: 'las-flores',
-  })
-  frontSubdomain?: string;
-
-  @ApiPropertyOptional({
-    description: 'Subdominio único para acceso',
-    example: 'condominio1',
+    description: 'Subdominio único para acceso (frontend y backend usan el mismo subdominio)',
+    example: 'condominio-las-flores',
   })
   subdomain?: string;
 
