@@ -49,6 +49,7 @@ async function bootstrap() {
       const allowedOrigins = [
         "http://localhost:5173",
         "http://localhost:3000",
+        "https://vekino.site",
         "http://localhost:3001",
         /^http:\/\/.*\.localhost:\d+$/, // Cualquier subdominio de localhost (api-*, condominio-*, etc.)
       ];

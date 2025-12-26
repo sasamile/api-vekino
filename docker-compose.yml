@@ -1,10 +1,6 @@
-version: '3.8'
-
 services:
   api-vekino:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/sasamile/api-vekino:latest
     container_name: nest-backend
     restart: always
     ports:
