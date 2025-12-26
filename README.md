@@ -79,6 +79,8 @@ npx prisma migrate dev
 
 #### Opción 1: Usando Docker Compose (Recomendado)
 
+
+
 ```bash
 # Construir y ejecutar el contenedor
 docker-compose up -d --build
