@@ -52,8 +52,13 @@ jobs:
             set -e
             cd ${{ secrets.EC2_APP_PATH }}
 
+            # Actualizar el código del repositorio
+            git pull origin main
+
+            # Login a GHCR
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
 
+            # Actualizar y recrear contenedores
             docker compose pull
-            docker compose up -d
+            docker compose up -d --force-recreate
             docker image prune -f
