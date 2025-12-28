@@ -2,10 +2,11 @@ import "dotenv/config";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
-import { SubdomainInterceptor } from "./condominios/interceptors/subdomain.interceptor";
-import { BigIntSerializerInterceptor } from "./common/interceptors/bigint-serializer.interceptor";
+import { SubdomainInterceptor } from "./config/interceptors/subdomain.interceptor";
+import { BigIntSerializerInterceptor } from "./config/interceptors/bigint-serializer.interceptor";
 import cookieParser from "cookie-parser";
-import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { SwaggerModule } from "@nestjs/swagger";
+import { swaggerConfig } from "./config/swagger/swagger.config";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -66,63 +67,8 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Configuración de Swagger/OpenAPI
-  const config = new DocumentBuilder()
-    .setTitle("API Vekino")
-    .setDescription(
-      `API para gestión de condominios
-
-## Sistema de Subdominios
-
-Esta API utiliza un sistema de subdominios para identificar condominios. Los endpoints de usuarios y unidades requieren que se acceda a través del subdominio del condominio.
-
-### Ejemplos de URLs:
-- **Desarrollo local**: \`http://condominio-las-flores.localhost:3000\`
-- **Producción**: \`https://condominio-las-flores.tudominio.com\`
-
-### Endpoints que requieren subdominio:
-- Todos los endpoints bajo \`/condominios/users\` (excepto \`/condominios/login\`)
-- Todos los endpoints bajo \`/unidades\`
-- \`GET /condominios/config\`
-
-### Endpoints que NO requieren subdominio:
-- \`POST /superadmin/*\` - Autenticación de superadministradores
-- \`POST /condominios\` - Crear condominio (requiere SUPERADMIN)
-- \`GET /condominios\` - Listar todos los condominios
-- \`GET /condominios/{id}\` - Obtener condominio por ID
-- \`POST /condominios/login\` - Login de usuarios (detecta subdominio automáticamente)
-- \`GET /condominios/validate-subdomain/{subdomain}\` - Validar subdominio
-
-### Autenticación:
-- **Superadministradores**: Usan \`/superadmin/login\` y obtienen un token JWT
-- **Usuarios de condominios**: Usan \`/condominios/login\` y obtienen una cookie de sesión
-- Las cookies de sesión funcionan solo en el subdominio específico del condominio`
-    )
-    .setVersion("1.0")
-    .addBearerAuth(
-      {
-        type: "http",
-        scheme: "bearer",
-        bearerFormat: "JWT",
-        name: "JWT",
-        description: "Token de autenticación JWT",
-        in: "header",
-      },
-      "JWT-auth",
-    )
-    .addCookieAuth("better-auth.session_token", {
-      type: "apiKey",
-      in: "cookie",
-      name: "better-auth.session_token",
-      description: "Cookie de sesión de Better Auth",
-    })
-    .addServer("http://localhost:3000", "Servidor base (sin subdominio) - Para endpoints de superadmin y creación de condominios")
-    .addServer("http://condominio-las-flores.localhost:3000", "Servidor con subdominio - Para endpoints de usuarios y unidades (ejemplo)")
-    .addTag("auth", "Autenticación - Endpoints de autenticación de superadministradores")
-    .addTag("condominios", "Condominios - Gestión de condominios")
-    .addTag("condominios-users", "Condominios - Usuarios - Gestión de usuarios de condominios")
-    .addTag("unidades", "Unidades - Gestión de unidades residenciales")
-    .build();
+  // Configuración de Swagger/OpenAPI (centralizada)
+  const config = swaggerConfig;
 
   const document = SwaggerModule.createDocument(app, config, {
     operationIdFactory: (controllerKey: string, methodKey: string) => methodKey,

@@ -1,0 +1,230 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaClient } from 'generated/prisma/client';
+
+/**
+ * Repositorio para operaciones de base de datos relacionadas con unidades
+ * Separa la lógica de acceso a datos de la lógica de negocio
+ */
+@Injectable()
+export class UnidadesRepository {
+  /**
+   * Busca una unidad por ID
+   */
+  async findById(prisma: PrismaClient, unidadId: string) {
+    const unidades = await prisma.$queryRaw<any[]>`
+      SELECT 
+        u.id,
+        u.identificador,
+        u.tipo,
+        u.area,
+        u."coeficienteCopropiedad",
+        u."valorCuotaAdministracion",
+        u.estado,
+        u."createdAt"::text as "createdAt",
+        u."updatedAt"::text as "updatedAt",
+        COUNT(us.id)::int as "totalUsuarios"
+      FROM "unidad" u
+      LEFT JOIN "user" us ON u.id = us."unidadId"
+      WHERE u.id = ${unidadId}
+      GROUP BY u.id, u.identificador, u.tipo, u.area, u."coeficienteCopropiedad", 
+               u."valorCuotaAdministracion", u.estado, u."createdAt", u."updatedAt"
+      LIMIT 1
+    `;
+    return unidades[0] || null;
+  }
+
+  /**
+   * Busca una unidad por identificador
+   */
+  async findByIdentificador(prisma: PrismaClient, identificador: string) {
+    const unidades = await prisma.$queryRaw<any[]>`
+      SELECT id FROM "unidad" WHERE identificador = ${identificador} LIMIT 1
+    `;
+    return unidades[0] || null;
+  }
+
+  /**
+   * Verifica si existe una unidad con el identificador dado (excluyendo un unidadId específico)
+   */
+  async existsByIdentificador(
+    prisma: PrismaClient,
+    identificador: string,
+    excludeUnidadId?: string,
+  ) {
+    const query = excludeUnidadId
+      ? prisma.$queryRaw<any[]>`
+          SELECT id FROM "unidad" WHERE identificador = ${identificador} AND id != ${excludeUnidadId} LIMIT 1
+        `
+      : prisma.$queryRaw<any[]>`
+          SELECT id FROM "unidad" WHERE identificador = ${identificador} LIMIT 1
+        `;
+    const unidades = await query;
+    return unidades[0] || null;
+  }
+
+  /**
+   * Busca todas las unidades
+   */
+  async findAll(prisma: PrismaClient) {
+    return prisma.$queryRaw<any[]>`
+      SELECT 
+        u.id,
+        u.identificador,
+        u.tipo,
+        u.area,
+        u."coeficienteCopropiedad",
+        u."valorCuotaAdministracion",
+        u.estado,
+        u."createdAt"::text as "createdAt",
+        u."updatedAt"::text as "updatedAt",
+        COUNT(us.id)::int as "totalUsuarios"
+      FROM "unidad" u
+      LEFT JOIN "user" us ON u.id = us."unidadId"
+      GROUP BY u.id, u.identificador, u.tipo, u.area, u."coeficienteCopropiedad",
+               u."valorCuotaAdministracion", u.estado, u."createdAt", u."updatedAt"
+      ORDER BY u.identificador ASC
+    `;
+  }
+
+  /**
+   * Busca todas las unidades sin agrupar (para obtener con usuarios)
+   */
+  async findAllBasic(prisma: PrismaClient) {
+    return prisma.$queryRaw<any[]>`
+      SELECT 
+        id,
+        identificador,
+        tipo,
+        area,
+        "coeficienteCopropiedad",
+        "valorCuotaAdministracion",
+        estado,
+        "createdAt"::text as "createdAt",
+        "updatedAt"::text as "updatedAt"
+      FROM "unidad"
+      ORDER BY identificador ASC
+    `;
+  }
+
+  /**
+   * Busca usuarios de una unidad
+   */
+  async findUsersByUnidadId(prisma: PrismaClient, unidadId: string) {
+    return prisma.$queryRaw<any[]>`
+      SELECT 
+        id,
+        name,
+        "firstName",
+        "lastName",
+        email,
+        "tipoDocumento",
+        "numeroDocumento",
+        telefono,
+        role,
+        "unidadId",
+        "createdAt"::text as "createdAt",
+        "updatedAt"::text as "updatedAt"
+      FROM "user"
+      WHERE "unidadId" = ${unidadId}
+      ORDER BY "firstName" ASC, "lastName" ASC
+    `;
+  }
+
+  /**
+   * Cuenta usuarios de una unidad
+   */
+  async countUsersByUnidadId(prisma: PrismaClient, unidadId: string) {
+    const result = await prisma.$queryRaw<any[]>`
+      SELECT COUNT(*) as total FROM "user" WHERE "unidadId" = ${unidadId}
+    `;
+    return parseInt(result[0]?.total || '0', 10);
+  }
+
+  /**
+   * Crea una nueva unidad
+   */
+  async create(prisma: PrismaClient, unidadData: any) {
+    await prisma.$executeRaw`
+      INSERT INTO "unidad" (
+        id, identificador, tipo, area, "coeficienteCopropiedad", 
+        "valorCuotaAdministracion", estado, "createdAt", "updatedAt"
+      )
+      VALUES (
+        ${unidadData.id}, ${unidadData.identificador}, ${unidadData.tipo}::"TipoUnidad", 
+        ${unidadData.area || null}, ${unidadData.coeficienteCopropiedad || null}, 
+        ${unidadData.valorCuotaAdministracion || null}, ${unidadData.estado}::"EstadoUnidad", 
+        NOW(), NOW()
+      )
+    `;
+
+    return this.findById(prisma, unidadData.id);
+  }
+
+  /**
+   * Actualiza una unidad
+   */
+  async update(prisma: PrismaClient, unidadId: string, updates: any) {
+    const updateFields: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (updates.identificador !== undefined) {
+      updateFields.push(`identificador = $${paramIndex}`);
+      values.push(updates.identificador);
+      paramIndex++;
+    }
+
+    if (updates.tipo !== undefined) {
+      updateFields.push(`tipo = $${paramIndex}::"TipoUnidad"`);
+      values.push(updates.tipo);
+      paramIndex++;
+    }
+
+    if (updates.area !== undefined) {
+      updateFields.push(`area = $${paramIndex}`);
+      values.push(updates.area || null);
+      paramIndex++;
+    }
+
+    if (updates.coeficienteCopropiedad !== undefined) {
+      updateFields.push(`"coeficienteCopropiedad" = $${paramIndex}`);
+      values.push(updates.coeficienteCopropiedad || null);
+      paramIndex++;
+    }
+
+    if (updates.valorCuotaAdministracion !== undefined) {
+      updateFields.push(`"valorCuotaAdministracion" = $${paramIndex}`);
+      values.push(updates.valorCuotaAdministracion || null);
+      paramIndex++;
+    }
+
+    if (updates.estado !== undefined) {
+      updateFields.push(`estado = $${paramIndex}::"EstadoUnidad"`);
+      values.push(updates.estado);
+      paramIndex++;
+    }
+
+    updateFields.push(`"updatedAt" = NOW()`);
+
+    if (updateFields.length > 0) {
+      values.push(unidadId);
+      await prisma.$executeRawUnsafe(
+        `UPDATE "unidad" SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`,
+        ...values,
+      );
+    }
+
+    return this.findById(prisma, unidadId);
+  }
+
+  /**
+   * Elimina una unidad
+   */
+  async delete(prisma: PrismaClient, unidadId: string) {
+    await prisma.$executeRaw`
+      DELETE FROM "unidad" WHERE id = ${unidadId}
+    `;
+  }
+}
+
+

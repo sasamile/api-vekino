@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   HttpCode,
   HttpStatus,
@@ -15,11 +16,14 @@ import {
   ApiBody,
   ApiCookieAuth,
 } from '@nestjs/swagger';
-import { AuthService } from './auth.service';
-import { RegisterSuperadminDto } from './dto/superadmin/register-superadmin.dto';
-import { LoginSuperadminDto } from './dto/superadmin/login-superadmin.dto';
-import { AuthResponseDto } from './dto/auth-response.dto';
+
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
+import { AuthService } from 'src/application/services/auth.service';
+import { RegisterSuperadminDto } from 'src/domain/dto/auth/superadmin/register-superadmin.dto';
+import { LoginSuperadminDto } from 'src/domain/dto/auth/superadmin/login-superadmin.dto';
+import { AuthResponseDto } from 'src/domain/dto/auth/auth-response.dto';
+import { swaggerOperations } from 'src/config/swagger/swagger.config';
+import { swaggerExamples } from 'src/config/swagger/swagger-examples';
 
 @ApiTags('auth')
 @Controller('superadmin')
@@ -30,48 +34,20 @@ export class AuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Registrar un nuevo superadministrador',
-    description: `Crea una nueva cuenta de superadministrador en el sistema.
-
-**Ejemplo de uso con curl:**
-\`\`\`bash
-curl --location 'http://localhost:3000/superadmin/register' \\
---header 'Content-Type: application/json' \\
---data-raw '{
-    "email": "nspes2020@gmail.com",
-    "password": "Sa722413.",
-    "name": "Santiago Suescun"
-}'
-\`\`\``,
+    summary: swaggerOperations.auth.register.summary,
+    description: swaggerOperations.auth.register.description,
   })
   @ApiBody({ type: RegisterSuperadminDto })
   @ApiResponse({
     status: 201,
-    description: 'Superadministrador registrado exitosamente',
+    description: swaggerOperations.auth.register.responses[201].description,
     type: AuthResponseDto,
-    example: {
-      user: {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        email: 'admin@vekino.com',
-        name: 'Juan Pérez',
-        role: 'SUPERADMIN',
-      },
-      session: {
-        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        expiresAt: '2024-12-31T23:59:59.000Z',
-      },
-    },
+    example: swaggerExamples.auth.register.success,
   })
   @ApiResponse({
     status: 400,
-    description: 'Datos de registro inválidos',
-    schema: {
-      example: {
-        statusCode: 400,
-        message: ['email debe ser un correo electrónico válido', 'password debe tener al menos 8 caracteres'],
-        error: 'Bad Request',
-      },
-    },
+    description: swaggerOperations.auth.register.responses[400].description,
+    example: swaggerExamples.auth.register.error,
   })
   async register(
     @Body() dto: RegisterSuperadminDto,
@@ -86,47 +62,20 @@ curl --location 'http://localhost:3000/superadmin/register' \\
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Iniciar sesión como superadministrador',
-    description: `Autentica un superadministrador y establece una sesión.
-
-**Ejemplo de uso con curl:**
-\`\`\`bash
-curl --location 'http://localhost:3000/superadmin/login' \\
---header 'Content-Type: application/json' \\
---data-raw '{
-    "email": "nspes2020@gmail.com",
-    "password": "Sa722413."
-}'
-\`\`\``,
+    summary: swaggerOperations.auth.login.summary,
+    description: swaggerOperations.auth.login.description,
   })
   @ApiBody({ type: LoginSuperadminDto })
   @ApiResponse({
     status: 200,
-    description: 'Inicio de sesión exitoso',
+    description: swaggerOperations.auth.login.responses[200].description,
     type: AuthResponseDto,
-    example: {
-      user: {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        email: 'admin@vekino.com',
-        name: 'Juan Pérez',
-        role: 'SUPERADMIN',
-      },
-      session: {
-        token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        expiresAt: '2024-12-31T23:59:59.000Z',
-      },
-    },
+    example: swaggerExamples.auth.login.success,
   })
   @ApiResponse({
     status: 401,
-    description: 'Credenciales inválidas',
-    schema: {
-      example: {
-        statusCode: 401,
-        message: 'Credenciales inválidas',
-        error: 'Unauthorized',
-      },
-    },
+    description: swaggerOperations.auth.login.responses[401].description,
+    example: swaggerExamples.auth.login.error,
   })
   async login(
     @Body() dto: LoginSuperadminDto,
@@ -136,6 +85,28 @@ curl --location 'http://localhost:3000/superadmin/login' \\
     const result = await this.authService.loginSuperadmin(dto, req);
     this.setCookiesFromHeaders(result.headers, res);
     return res.json(result.data || result);
+  }
+
+  @Get('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: swaggerOperations.auth.getCurrentUser.summary,
+    description: swaggerOperations.auth.getCurrentUser.description,
+  })
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: swaggerOperations.auth.getCurrentUser.responses[200].description,
+    type: AuthResponseDto,
+    example: swaggerExamples.auth.getCurrentUser.success,
+  })
+  @ApiResponse({
+    status: 403,
+    description: swaggerOperations.auth.getCurrentUser.responses[403].description,
+    example: swaggerExamples.auth.getCurrentUser.error,
+  })
+  async getCurrentUser(@Req() req: Request) {
+    return this.authService.getCurrentUser(req);
   }
 
   /**

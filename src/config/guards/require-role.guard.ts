@@ -8,11 +8,11 @@ import {
 import { Reflector } from '@nestjs/core';
 import { PrismaClient } from 'generated/prisma/client';
 import { Inject } from '@nestjs/common';
-import { auth } from '../config/auth/auth';
+import { auth } from 'src/config/auth/auth';
 import { fromNodeHeaders } from 'better-auth/node';
-import { CondominiosService } from '../condominios/condominios.service';
-import { createAuthForCondominio } from '../config/auth/auth-condominio.factory';
-import { DatabaseManagerService } from '../config/database-manager.service';
+import { CondominiosService } from 'src/application/services/condominios.service';
+import { createAuthForCondominio } from 'src/config/auth/auth-condominio.factory';
+import { DatabaseManagerService } from 'src/config/database-manager.service';
 
 export const ROLE_KEY = 'role';
 export const CONDOMINIO_ACCESS_KEY = 'condominioAccess';

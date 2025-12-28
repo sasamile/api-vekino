@@ -2,22 +2,26 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  Inject,
 } from '@nestjs/common';
 import { PrismaClient } from 'generated/prisma/client';
-import { DatabaseManagerService } from '../config/database-manager.service';
-import { CreateCondominioDto } from './dto/create-condominio.dto';
-import { UpdateCondominioDto } from './dto/update-condominio.dto';
-import { S3Service } from '../config/aws/s3/s3.service';
-import { ImageProcessingService } from '../config/aws/s3/image-processing.service';
+import { DatabaseManagerService } from '../../config/database-manager.service';
+import { CreateCondominioDto } from '../../domain/dto/condominios/create-condominio.dto';
+import { UpdateCondominioDto } from '../../domain/dto/condominios/update-condominio.dto';
+import { S3Service } from '../../config/aws/s3/s3.service';
+import { ImageProcessingService } from '../../config/aws/s3/image-processing.service';
+import { CondominiosRepository } from '../../infrastructure/repositories/condominios.repository';
 
+/**
+ * Servicio de aplicación para gestión de condominios
+ * Contiene la lógica de negocio y orquesta las operaciones
+ */
 @Injectable()
 export class CondominiosService {
   constructor(
-    @Inject(PrismaClient) private masterPrisma: PrismaClient,
-    private databaseManager: DatabaseManagerService,
-    private s3Service: S3Service,
-    private imageProcessingService: ImageProcessingService,
+    private readonly condominiosRepository: CondominiosRepository,
+    private readonly databaseManager: DatabaseManagerService,
+    private readonly s3Service: S3Service,
+    private readonly imageProcessingService: ImageProcessingService,
   ) {}
 
   /**
@@ -30,23 +34,21 @@ export class CondominiosService {
 
   /**
    * Normaliza un nombre para usarlo como subdominio o nombre de base de datos
-   * Ejemplo: "Condominio Las Flores" -> "condominio-las-flores"
    */
   private normalizeName(name: string): string {
     return name
       .toLowerCase()
-      .normalize('NFD') // Normaliza caracteres con acentos
-      .replace(/[\u0300-\u036f]/g, '') // Elimina diacríticos
-      .replace(/[^a-z0-9\s-]/g, '') // Elimina caracteres especiales
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
       .trim()
-      .replace(/\s+/g, '-') // Reemplaza espacios con guiones
-      .replace(/-+/g, '-') // Elimina guiones múltiples
-      .replace(/^-|-$/g, ''); // Elimina guiones al inicio/final
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
   }
 
   /**
    * Genera un subdominio único basado en el nombre o subdominio proporcionado
-   * Si ya existe, agrega un número al final
    */
   private async generateUniqueSubdomain(
     baseName: string,
@@ -57,15 +59,15 @@ export class CondominiosService {
     let counter = 1;
 
     while (true) {
-      const existing = await this.masterPrisma.condominio.findUnique({
-        where: { subdomain },
-      });
+      const exists = await this.condominiosRepository.existsBySubdomain(
+        subdomain,
+        excludeId,
+      );
 
-      if (!existing || existing.id === excludeId) {
+      if (!exists) {
         return subdomain;
       }
 
-      // Si existe, agregar un número
       subdomain = `${normalized}-${counter}`;
       counter++;
     }
@@ -73,25 +75,21 @@ export class CondominiosService {
 
   /**
    * Genera un nombre de base de datos único basado en el nombre
-   * Si ya existe, agrega un número al final
    */
   private async generateUniqueDatabaseName(baseName: string): Promise<string> {
     const normalized = this.normalizeName(baseName);
-    // Los nombres de BD no pueden tener guiones en algunos sistemas, usar guiones bajos
     const dbName = normalized.replace(/-/g, '_');
     let databaseName = dbName;
     let counter = 1;
 
     while (true) {
-      const existing = await this.masterPrisma.condominio.findUnique({
-        where: { databaseName },
-      });
+      const exists =
+        await this.condominiosRepository.existsByDatabaseName(databaseName);
 
-      if (!existing) {
+      if (!exists) {
         return databaseName;
       }
 
-      // Si existe, agregar un número
       databaseName = `${dbName}_${counter}`;
       counter++;
     }
@@ -104,33 +102,31 @@ export class CondominiosService {
     dto: CreateCondominioDto,
     logoFile?: Express.Multer.File,
   ) {
-    // Determinar subdominio (frontend y backend usan el mismo)
+    // Determinar subdominio
     let subdomain: string;
 
     if (dto.subdomain) {
       const normalized = this.normalizeName(dto.subdomain);
-      const existing = await this.masterPrisma.condominio.findUnique({
-        where: { subdomain: normalized },
-      });
+      const exists =
+        await this.condominiosRepository.existsBySubdomain(normalized);
 
-      if (existing) {
+      if (exists) {
         throw new BadRequestException(
           `Ya existe un condominio con el subdominio: ${normalized}`,
         );
       }
       subdomain = normalized;
     } else {
-      // Generar subdominio automáticamente desde el nombre si no se proporciona
       subdomain = await this.generateUniqueSubdomain(dto.name);
     }
 
-    // Generar nombre de base de datos automáticamente si no se proporciona
-    const databaseName = dto.databaseName || await this.generateUniqueDatabaseName(dto.name);
+    // Generar nombre de base de datos
+    const databaseName =
+      dto.databaseName || (await this.generateUniqueDatabaseName(dto.name));
 
-    // Verificar que el nombre de la base de datos no exista (por si acaso)
-    const existingByDb = await this.masterPrisma.condominio.findUnique({
-      where: { databaseName },
-    });
+    // Verificar que el nombre de la base de datos no exista
+    const existingByDb =
+      await this.condominiosRepository.existsByDatabaseName(databaseName);
 
     if (existingByDb) {
       throw new BadRequestException(
@@ -138,10 +134,9 @@ export class CondominiosService {
       );
     }
 
-    // Verificar que el subdominio no exista (por si acaso)
-    const existingBySubdomain = await this.masterPrisma.condominio.findUnique({
-      where: { subdomain },
-    });
+    // Verificar que el subdominio no exista
+    const existingBySubdomain =
+      await this.condominiosRepository.existsBySubdomain(subdomain);
 
     if (existingBySubdomain) {
       throw new BadRequestException(
@@ -166,22 +161,18 @@ export class CondominiosService {
         );
 
       // Procesar y subir logo si se proporciona
-      let logoUrl = dto.logo; // Si viene URL en el DTO, usarla
-      
+      let logoUrl = dto.logo;
+
       if (logoFile) {
         try {
-          // Convertir imagen a WebP
           const webpBuffer = await this.imageProcessingService.resizeAndConvertToWebP(
             logoFile.buffer,
-            800, // maxWidth
-            800, // maxHeight
-            80,  // quality
+            800,
+            800,
+            80,
           );
 
-          // Generar un ID temporal para el condominio (se usará antes de crear el registro)
           const tempId = `temp-${Date.now()}`;
-          
-          // Subir a S3
           logoUrl = await this.s3Service.uploadCondominioLogo(webpBuffer, tempId);
         } catch (error) {
           console.error('Error procesando logo:', error);
@@ -196,59 +187,32 @@ export class CondominiosService {
         ? new Date(dto.planExpiresAt)
         : null;
 
-      // Crear el registro del condominio en la base de datos maestra
-      const condominio = await this.masterPrisma.condominio.create({
-        data: {
-          name: dto.name,
-          subdomain: subdomain,
-          databaseName: databaseName,
-          databaseUrl: condominioDatabaseUrl,
-          // Información Institucional
-          nit: dto.nit,
-          address: dto.address,
-          city: dto.city,
-          country: dto.country,
-          timezone: dto.timezone,
-          // Configuración de Acceso y Dominio
-          logo: logoUrl,
-          primaryColor: dto.primaryColor || '#3B82F6',
-          // Límites y Plan
-          subscriptionPlan: dto.subscriptionPlan,
-          unitLimit: dto.unitLimit,
-          planExpiresAt: planExpiresAt,
-          activeModules: dto.activeModules
-            ? JSON.stringify(dto.activeModules)
-            : null,
-        },
+      // Crear el registro del condominio
+      const condominio = await this.condominiosRepository.create({
+        name: dto.name,
+        subdomain: subdomain,
+        databaseName: databaseName,
+        databaseUrl: condominioDatabaseUrl,
+        nit: dto.nit,
+        address: dto.address,
+        city: dto.city,
+        country: dto.country,
+        timezone: dto.timezone,
+        logo: logoUrl,
+        primaryColor: dto.primaryColor || '#3B82F6',
+        subscriptionPlan: dto.subscriptionPlan,
+        unitLimit: dto.unitLimit,
+        planExpiresAt: planExpiresAt,
+        activeModules: dto.activeModules
+          ? JSON.stringify(dto.activeModules)
+          : null,
       });
 
-      // Si se subió un logo, actualizar el nombre del archivo en S3 con el ID real del condominio
-      if (logoFile && logoUrl) {
-        try {
-          // Extraer el nombre del archivo actual
-          const urlParts = logoUrl.split('/');
-          const currentFileName = urlParts[urlParts.length - 1];
-          
-          // Crear nuevo nombre con el ID real del condominio
-          const newFileName = `${condominio.id}-${Date.now()}.webp`;
-          const newKey = `condominios/logos/${newFileName}`;
-          
-          // Obtener el archivo actual de S3 y subirlo con el nuevo nombre
-          // Nota: En producción, podrías usar CopyObjectCommand de S3 para renombrar
-          // Por ahora, simplemente usamos el nombre temporal ya que funciona igual
-        } catch (error) {
-          // No es crítico, el logo ya está subido y funcionando
-          console.warn('No se pudo actualizar el nombre del logo:', error);
-        }
-      }
-
       // Inicializar el esquema en la nueva base de datos
-      // Esto creará automáticamente todas las tablas según schema-condominio.prisma
       await this.databaseManager.initializeCondominioDatabase(
         condominioDatabaseUrl,
       );
 
-      // Retornar sin campos sensibles
       return this.excludeSensitiveFields(condominio);
     } catch (error) {
       console.error('Error creando condominio:', error);
@@ -262,10 +226,7 @@ export class CondominiosService {
    * Obtiene todos los condominios (solo para superadmin)
    */
   async findAll() {
-    const condominios = await this.masterPrisma.condominio.findMany({
-      where: { isActive: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    const condominios = await this.condominiosRepository.findAllActive();
     return condominios.map((c) => this.excludeSensitiveFields(c));
   }
 
@@ -273,15 +234,7 @@ export class CondominiosService {
    * Obtiene un condominio por ID
    */
   async findOne(id: string) {
-    const condominio = await this.masterPrisma.condominio.findUnique({
-      where: { id },
-    });
-
-    if (!condominio) {
-      throw new NotFoundException(`Condominio con ID ${id} no encontrado`);
-    }
-
-    return condominio;
+    return this.condominiosRepository.findById(id);
   }
 
   /**
@@ -296,16 +249,7 @@ export class CondominiosService {
    * Obtiene el cliente de Prisma para un condominio específico
    */
   async getPrismaClientForCondominio(condominioId: string): Promise<PrismaClient> {
-    const condominio = await this.masterPrisma.condominio.findUnique({
-      where: { id: condominioId },
-    });
-
-    if (!condominio) {
-      throw new NotFoundException(
-        `Condominio con ID ${condominioId} no encontrado`,
-      );
-    }
-
+    const condominio = await this.condominiosRepository.findById(condominioId);
     return this.databaseManager.getPrismaClientForCondominio(
       condominio.databaseUrl,
     );
@@ -313,12 +257,9 @@ export class CondominiosService {
 
   /**
    * Busca un condominio por su subdominio
-   * Retorna el condominio completo (incluye campos sensibles) para uso interno
    */
   async findCondominioBySubdomain(subdomain: string) {
-    const condominio = await this.masterPrisma.condominio.findUnique({
-      where: { subdomain },
-    });
+    const condominio = await this.condominiosRepository.findBySubdomain(subdomain);
 
     if (!condominio) {
       throw new NotFoundException(
@@ -338,13 +279,11 @@ export class CondominiosService {
    */
   async deactivateCondominio(id: string) {
     await this.findOne(id);
-    const condominio = await this.masterPrisma.condominio.update({
-      where: { id },
-      data: { isActive: false },
+    const condominio = await this.condominiosRepository.update(id, {
+      isActive: false,
     });
     return this.excludeSensitiveFields(condominio);
   }
-
 
   /**
    * Actualiza un condominio
@@ -362,11 +301,12 @@ export class CondominiosService {
     // Si se actualiza el subdominio, normalizar y validar
     if (dto.subdomain !== undefined) {
       const normalized = this.normalizeName(dto.subdomain);
-      const existing = await this.masterPrisma.condominio.findUnique({
-        where: { subdomain: normalized },
-      });
+      const exists = await this.condominiosRepository.existsBySubdomain(
+        normalized,
+        id,
+      );
 
-      if (existing && existing.id !== id) {
+      if (exists) {
         throw new BadRequestException(
           `Ya existe un condominio con el subdominio: ${normalized}`,
         );
@@ -376,19 +316,17 @@ export class CondominiosService {
     }
 
     // Procesar y subir logo si se proporciona
-    let logoUrl = dto.logo; // Si viene URL en el DTO, usarla
-    
+    let logoUrl = dto.logo;
+
     if (logoFile) {
       try {
-        // Convertir imagen a WebP
         const webpBuffer = await this.imageProcessingService.resizeAndConvertToWebP(
           logoFile.buffer,
-          800, // maxWidth
-          800, // maxHeight
-          80,  // quality
+          800,
+          800,
+          80,
         );
 
-        // Subir a S3
         logoUrl = await this.s3Service.uploadCondominioLogo(webpBuffer, id);
       } catch (error) {
         console.error('Error procesando logo:', error);
@@ -408,7 +346,8 @@ export class CondominiosService {
     if (dto.timezone !== undefined) updateData.timezone = dto.timezone;
     if (effectiveSubdomain !== null) updateData.subdomain = effectiveSubdomain;
     if (logoUrl !== undefined) updateData.logo = logoUrl;
-    if (dto.primaryColor !== undefined) updateData.primaryColor = dto.primaryColor;
+    if (dto.primaryColor !== undefined)
+      updateData.primaryColor = dto.primaryColor;
     if (dto.subscriptionPlan !== undefined)
       updateData.subscriptionPlan = dto.subscriptionPlan;
     if (dto.unitLimit !== undefined) updateData.unitLimit = dto.unitLimit;
@@ -418,16 +357,12 @@ export class CondominiosService {
       updateData.activeModules = JSON.stringify(dto.activeModules);
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
 
-    const condominio = await this.masterPrisma.condominio.update({
-      where: { id },
-      data: updateData,
-    });
+    const condominio = await this.condominiosRepository.update(id, updateData);
     return this.excludeSensitiveFields(condominio);
   }
 
   /**
    * Obtiene la configuración visual del condominio (logo, color)
-   * Para usar en el frontend cuando se accede desde el subdominio
    */
   async getCondominioConfig(subdomain: string) {
     const condominioData = await this.findCondominioBySubdomain(subdomain);
@@ -447,16 +382,9 @@ export class CondominiosService {
     subdomainCandidate: string,
   ): Promise<{ available: boolean; subdomain: string }> {
     const normalized = this.normalizeName(subdomainCandidate);
-
     const suggested = await this.generateUniqueSubdomain(normalized);
-
     const isSame = suggested === normalized;
-    const isAvailable =
-      (
-        await this.masterPrisma.condominio.findUnique({
-          where: { subdomain: normalized },
-        })
-      ) === null;
+    const isAvailable = !(await this.condominiosRepository.existsBySubdomain(normalized));
 
     return {
       available: isAvailable && isSame,
@@ -466,12 +394,10 @@ export class CondominiosService {
 
   /**
    * Elimina un condominio y su base de datos
-   * IMPORTANTE: Esta acción es irreversible
    */
   async deleteCondominio(id: string) {
     const condominio = await this.findOne(id);
 
-    // Obtener la URL de la base de datos maestra
     const masterDatabaseUrl = process.env.DATABASE_URL;
     if (!masterDatabaseUrl) {
       throw new BadRequestException(
@@ -486,10 +412,8 @@ export class CondominiosService {
         condominio.databaseName,
       );
 
-      // 2. Eliminar el registro del condominio en la base de datos maestra
-      await this.masterPrisma.condominio.delete({
-        where: { id },
-      });
+      // 2. Eliminar el registro del condominio
+      await this.condominiosRepository.delete(id);
 
       return {
         message: `Condominio ${condominio.name} y su base de datos han sido eliminados correctamente`,
@@ -501,6 +425,13 @@ export class CondominiosService {
         `Error al eliminar el condominio: ${error.message}`,
       );
     }
+  }
+
+  /**
+   * Obtiene todos los subdominios (dominios) de condominios activos
+   */
+  async getAllDomains() {
+    return this.condominiosRepository.findAllActiveSubdomains();
   }
 }
 
