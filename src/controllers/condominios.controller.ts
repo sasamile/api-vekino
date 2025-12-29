@@ -511,6 +511,41 @@ export class CondominiosController {
     );
   }
 
+  // Ruta para SUPERADMIN: obtener todos los usuarios de un condominio por ID
+  // Esta ruta va después de POST :condominioId/users pero antes de las rutas genéricas con :id
+  @ApiTags('condominios-users')
+  @Get(':condominioId/users')
+  @UseGuards(RoleGuard)
+  @RequireRole('SUPERADMIN')
+  @ApiOperation({
+    summary: swaggerOperations.condominiosUsers.findAllByCondominioId.summary,
+    description: swaggerOperations.condominiosUsers.findAllByCondominioId.description,
+  })
+  @ApiParam({
+    name: 'condominioId',
+    description: 'ID único del condominio',
+    example: '9920348c-08c1-4078-b389-bfebb2287a3b',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: swaggerOperations.condominiosUsers.findAllByCondominioId.responses[200].description,
+    type: [CondominioUserResponseDto],
+    example: swaggerExamples.condominiosUsers.findAll.success,
+  })
+  @ApiResponse({
+    status: 404,
+    description: swaggerOperations.condominiosUsers.findAllByCondominioId.responses[404].description,
+  })
+  @ApiResponse({
+    status: 403,
+    description: swaggerOperations.condominiosUsers.findAllByCondominioId.responses[403].description,
+  })
+  async getUsersByCondominioId(@Param('condominioId') condominioId: string) {
+    return this.condominiosUsersService.getUsersInCondominio(condominioId);
+  }
+
   // Obtener todos los dominios de condominios activos (ruta pública)
   // IMPORTANTE: Esta ruta debe ir ANTES de GET /:id para que tenga prioridad
   @ApiTags('condominios')

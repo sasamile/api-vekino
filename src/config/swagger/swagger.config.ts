@@ -452,6 +452,30 @@ curl --location 'http://localhost:3000/condominios/{condominioId}/users' \\
         },
       },
     },
+    findAllByCondominioId: {
+      summary: 'Obtener todos los usuarios de un condominio por ID (solo SUPERADMIN)',
+      description: `Retorna una lista de todos los usuarios de un condominio específico. Solo disponible para SUPERADMIN.
+Requiere especificar el ID del condominio en la URL.
+
+**Ejemplo de uso con curl:**
+\`\`\`bash
+curl --location 'http://localhost:3000/condominios/{condominioId}/users' \\
+--header 'Content-Type: application/json' \\
+--header 'Authorization: Bearer TU_TOKEN_AQUI' \\
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI'
+\`\`\``,
+      responses: {
+        200: {
+          description: 'Lista de usuarios obtenida exitosamente',
+        },
+        404: {
+          description: 'Condominio no encontrado',
+        },
+        403: {
+          description: 'No autorizado - Se requiere rol SUPERADMIN',
+        },
+      },
+    },
     login: {
       summary: 'Iniciar sesión como usuario de condominio',
       description: 'Autentica un usuario de condominio y establece una sesión. El condominio se detecta automáticamente del subdominio si no se proporciona condominioId.',
