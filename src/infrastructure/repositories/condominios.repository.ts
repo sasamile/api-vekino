@@ -51,6 +51,8 @@ export class CondominiosRepository {
     limit?: number;
     search?: string;
     isActive?: boolean;
+    subscriptionPlan?: string;
+    city?: string;
   }) {
     const page = filters.page || 1;
     const limit = filters.limit || 10;
@@ -60,6 +62,18 @@ export class CondominiosRepository {
 
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive;
+      console.log('🔍 Aplicando filtro isActive:', filters.isActive, 'Type:', typeof filters.isActive);
+    }
+
+    if (filters.subscriptionPlan) {
+      where.subscriptionPlan = filters.subscriptionPlan;
+    }
+
+    if (filters.city) {
+      where.city = {
+        contains: filters.city,
+        mode: 'insensitive',
+      };
     }
 
     if (filters.search) {

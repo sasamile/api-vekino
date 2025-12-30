@@ -1,6 +1,7 @@
-import { IsOptional, IsInt, Min, IsString, IsBoolean } from 'class-validator';
+import { IsOptional, IsInt, Min, IsString, IsBoolean, IsEnum } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { SubscriptionPlan } from './create-condominio.dto';
 
 export class QueryCondominiosDto {
   @ApiPropertyOptional({
@@ -41,13 +42,31 @@ export class QueryCondominiosDto {
     example: true,
   })
   @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
+    // Manejar diferentes formatos de entrada
+    if (value === 'true' || value === true || value === '1' || value === 1) return true;
+    if (value === 'false' || value === false || value === '0' || value === 0 || value === '') return false;
+    // Si no es un valor reconocido, retornar undefined para que sea opcional
+    return undefined;
   })
-  @Type(() => Boolean)
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Filtrar por plan de suscripción',
+    enum: SubscriptionPlan,
+    example: SubscriptionPlan.BASICO,
+  })
+  @IsEnum(SubscriptionPlan)
+  @IsOptional()
+  subscriptionPlan?: SubscriptionPlan;
+
+  @ApiPropertyOptional({
+    description: 'Filtrar por ciudad',
+    example: 'Bogotá',
+  })
+  @IsString()
+  @IsOptional()
+  city?: string;
 }
 

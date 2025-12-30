@@ -230,8 +230,20 @@ export class CondominiosService {
     limit?: number;
     search?: string;
     isActive?: boolean;
+    subscriptionPlan?: string;
+    city?: string;
   }) {
-    if (filters && (filters.page || filters.limit || filters.search || filters.isActive !== undefined)) {
+    // Si hay cualquier filtro o paginación, usar findAllWithPagination
+    const hasFilters = filters && (
+      filters.page !== undefined || 
+      filters.limit !== undefined || 
+      filters.search || 
+      filters.isActive !== undefined || 
+      filters.subscriptionPlan || 
+      filters.city
+    );
+
+    if (hasFilters) {
       const result = await this.condominiosRepository.findAllWithPagination(filters);
       return {
         data: result.data.map((c) => this.excludeSensitiveFields(c)),
