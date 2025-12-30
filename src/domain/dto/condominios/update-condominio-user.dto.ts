@@ -99,11 +99,12 @@ export class UpdateCondominioUserDto {
     example: true,
   })
   @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
+    // Manejar diferentes formatos de entrada (string desde form-data o boolean)
+    if (value === 'true' || value === true || value === '1' || value === 1) return true;
+    if (value === 'false' || value === false || value === '0' || value === 0 || value === '') return false;
+    // Si no es un valor reconocido, retornar el valor original
     return value;
   })
-  @Type(() => Boolean)
   @IsBoolean()
   @IsOptional()
   active?: boolean;

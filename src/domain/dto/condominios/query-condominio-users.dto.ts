@@ -51,11 +51,12 @@ export class QueryCondominioUsersDto {
     example: true,
   })
   @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
+    // Manejar diferentes formatos de entrada
+    if (value === 'true' || value === true || value === '1' || value === 1) return true;
+    if (value === 'false' || value === false || value === '0' || value === 0 || value === '') return false;
+    // Si no es un valor reconocido, retornar undefined para que sea opcional
+    return undefined;
   })
-  @Type(() => Boolean)
   @IsBoolean()
   @IsOptional()
   active?: boolean;
