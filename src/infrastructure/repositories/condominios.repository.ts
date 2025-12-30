@@ -62,7 +62,6 @@ export class CondominiosRepository {
 
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive;
-      console.log('🔍 Aplicando filtro isActive:', filters.isActive, 'Type:', typeof filters.isActive);
     }
 
     if (filters.subscriptionPlan) {

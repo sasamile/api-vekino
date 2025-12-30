@@ -92,6 +92,13 @@ export class UpdateCondominioDto {
   activeModules?: string[];
 
   // Estado
+  @Transform(({ value }) => {
+    // Manejar diferentes formatos de entrada (string desde form-data o boolean)
+    if (value === 'true' || value === true || value === '1' || value === 1) return true;
+    if (value === 'false' || value === false || value === '0' || value === 0 || value === '') return false;
+    // Si no es un valor reconocido, retornar el valor original
+    return value;
+  })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean; // Para suspender/activar el servicio
