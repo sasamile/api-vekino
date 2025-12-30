@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   Patch,
@@ -52,6 +53,8 @@ import {
 import { swaggerOperations } from 'src/config/swagger/swagger.config';
 import { swaggerExamples } from 'src/config/swagger/swagger-examples';
 import { UpdateCondominioDto } from 'src/domain/dto/condominios/update-condominio.dto';
+import { QueryCondominiosDto } from 'src/domain/dto/condominios/query-condominios.dto';
+import { QueryCondominioUsersDto } from 'src/domain/dto/condominios/query-condominio-users.dto';
 
 @Controller('condominios')
 export class CondominiosController {
@@ -119,8 +122,8 @@ export class CondominiosController {
     type: [CondominioResponseDto],
     example: swaggerExamples.condominios.findAll.success,
   })
-  async findAll() {
-    return this.condominiosService.findAll();
+  async findAll(@Query() query: QueryCondominiosDto) {
+    return this.condominiosService.findAll(query);
   }
 
   // Rutas específicas de usuarios - DEBEN ir antes de las rutas con :id
@@ -191,9 +194,9 @@ export class CondominiosController {
     status: 403,
     description: swaggerOperations.condominiosUsers.findAll.responses[403].description,
   })
-  async getUsers(@Req() req: Request) {
+  async getUsers(@Req() req: Request, @Query() query: QueryCondominioUsersDto) {
     const condominioId = await this.getCondominioIdFromSubdomain(req);
-    return this.condominiosUsersService.getUsersInCondominio(condominioId);
+    return this.condominiosUsersService.getUsersInCondominio(condominioId, query);
   }
 
   @ApiTags('condominios-users')
@@ -542,8 +545,74 @@ export class CondominiosController {
     status: 403,
     description: swaggerOperations.condominiosUsers.findAllByCondominioId.responses[403].description,
   })
-  async getUsersByCondominioId(@Param('condominioId') condominioId: string) {
-    return this.condominiosUsersService.getUsersInCondominio(condominioId);
+  async getUsersByCondominioId(
+    @Param('condominioId') condominioId: string,
+    @Query() query: QueryCondominioUsersDto,
+  ) {
+    return this.condominiosUsersService.getUsersInCondominio(condominioId, query);
+  }
+
+  // Ruta para SUPERADMIN: editar usuario especificando el ID del condominio y del usuario en la URL
+  @ApiTags('condominios-users')
+  @Put(':condominioId/users/:userId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RoleGuard)
+  @RequireRole('SUPERADMIN')
+  @UseInterceptors(FileInterceptor('image'))
+  @ApiOperation({
+    summary: 'Actualizar un usuario de condominio',
+    description: 'Actualiza un usuario específico de un condominio. Requiere rol SUPERADMIN.',
+  })
+  @ApiParam({
+    name: 'condominioId',
+    description: 'ID único del condominio',
+    example: '9920348c-08c1-4078-b389-bfebb2287a3b',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'ID único del usuario',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: UpdateCondominioUserDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Usuario actualizado exitosamente',
+    type: CondominioUserResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Usuario o condominio no encontrado',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No autorizado - Se requiere rol SUPERADMIN',
+  })
+  async updateUserByCondominioId(
+    @Param('condominioId') condominioId: string,
+    @Param('userId') userId: string,
+    @Body() updateUserDto: UpdateCondominioUserDto,
+    @Req() req: Request,
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    imageFile?: Express.Multer.File,
+  ) {
+    return this.condominiosUsersService.updateUserInCondominio(
+      condominioId,
+      userId,
+      updateUserDto,
+      req,
+      imageFile,
+    );
   }
 
   // Obtener todos los dominios de condominios activos (ruta pública)

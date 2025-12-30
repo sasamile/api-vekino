@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsEnum, IsOptional, MinLength } from 'class-validator';
+import { IsString, IsEmail, IsEnum, IsOptional, MinLength, IsBoolean } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { CondominioUserRole } from './create-condominio-user.dto';
@@ -93,5 +93,19 @@ export class UpdateCondominioUserDto {
   @IsString()
   @IsOptional()
   unidadId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Indica si el usuario está activo',
+    example: true,
+  })
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @Type(() => Boolean)
+  @IsBoolean()
+  @IsOptional()
+  active?: boolean;
 }
 

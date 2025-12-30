@@ -225,7 +225,23 @@ export class CondominiosService {
   /**
    * Obtiene todos los condominios (solo para superadmin)
    */
-  async findAll() {
+  async findAll(filters?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    isActive?: boolean;
+  }) {
+    if (filters && (filters.page || filters.limit || filters.search || filters.isActive !== undefined)) {
+      const result = await this.condominiosRepository.findAllWithPagination(filters);
+      return {
+        data: result.data.map((c) => this.excludeSensitiveFields(c)),
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+      };
+    }
+    
     const condominios = await this.condominiosRepository.findAllActive();
     return condominios.map((c) => this.excludeSensitiveFields(c));
   }

@@ -127,6 +127,7 @@ export class SchemaMigrationService {
       { name: 'numeroDocumento', type: 'STRING' },
       { name: 'telefono', type: 'STRING' },
       { name: 'unidadId', type: 'STRING' },
+      { name: 'active', type: 'BOOL DEFAULT true' },
     ];
 
     try {
@@ -148,9 +149,27 @@ export class SchemaMigrationService {
       if (columnsToCreate.length > 0) {
         for (const col of columnsToCreate) {
           try {
-            await prisma.$executeRawUnsafe(
-              `ALTER TABLE "user" ADD COLUMN "${col.name}" ${col.type}`,
-            );
+            if (col.name === 'active') {
+              // Para active, agregar como nullable primero
+              await prisma.$executeRawUnsafe(
+                `ALTER TABLE "user" ADD COLUMN "${col.name}" BOOL`,
+              );
+              // Establecer valores por defecto para registros existentes
+              await prisma.$executeRawUnsafe(
+                `UPDATE "user" SET "${col.name}" = true WHERE "${col.name}" IS NULL`,
+              );
+              // Establecer NOT NULL y DEFAULT
+              await prisma.$executeRawUnsafe(
+                `ALTER TABLE "user" ALTER COLUMN "${col.name}" SET NOT NULL`,
+              );
+              await prisma.$executeRawUnsafe(
+                `ALTER TABLE "user" ALTER COLUMN "${col.name}" SET DEFAULT true`,
+              );
+            } else {
+              await prisma.$executeRawUnsafe(
+                `ALTER TABLE "user" ADD COLUMN "${col.name}" ${col.type}`,
+              );
+            }
             console.log(`✅ Columna ${col.name} agregada`);
           } catch (alterError: any) {
             if (
@@ -183,15 +202,41 @@ export class SchemaMigrationService {
         // Ignorar si ya existe
       }
 
+      try {
+        await prisma.$executeRawUnsafe(
+          `CREATE INDEX IF NOT EXISTS "user_active_idx" ON "user" ("active")`,
+        );
+      } catch (error: any) {
+        // Ignorar si ya existe
+      }
+
       this.columnsChecked.add(cacheKey);
     } catch (error: any) {
       console.warn('Error en verificación optimizada, usando método fallback:', error.message);
 
       for (const column of columnsToAdd) {
         try {
-          await prisma.$executeRawUnsafe(
-            `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "${column.name}" ${column.type}`,
-          );
+          if (column.name === 'active') {
+            // Para active, agregar como nullable primero
+            await prisma.$executeRawUnsafe(
+              `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "${column.name}" BOOL`,
+            );
+            // Establecer valores por defecto para registros existentes
+            await prisma.$executeRawUnsafe(
+              `UPDATE "user" SET "${column.name}" = true WHERE "${column.name}" IS NULL`,
+            );
+            // Establecer NOT NULL y DEFAULT
+            await prisma.$executeRawUnsafe(
+              `ALTER TABLE "user" ALTER COLUMN "${column.name}" SET NOT NULL`,
+            );
+            await prisma.$executeRawUnsafe(
+              `ALTER TABLE "user" ALTER COLUMN "${column.name}" SET DEFAULT true`,
+            );
+          } else {
+            await prisma.$executeRawUnsafe(
+              `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "${column.name}" ${column.type}`,
+            );
+          }
         } catch (alterError: any) {
           if (!alterError.message?.includes('already exists') && alterError.code !== '42701') {
             console.warn(`Advertencia al agregar columna ${column.name}:`, alterError.message);

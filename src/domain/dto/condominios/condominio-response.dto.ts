@@ -80,5 +80,26 @@ export class CondominioListResponseDto {
     example: 10,
   })
   total: number;
+
+  @ApiProperty({
+    description: 'Página actual',
+    example: 1,
+    required: false,
+  })
+  page?: number;
+
+  @ApiProperty({
+    description: 'Límite de elementos por página',
+    example: 10,
+    required: false,
+  })
+  limit?: number;
+
+  @ApiProperty({
+    description: 'Número total de páginas',
+    example: 3,
+    required: false,
+  })
+  totalPages?: number;
 }
 

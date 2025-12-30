@@ -168,6 +168,7 @@ export class CondominiosUsersService {
         numeroDocumento: dto.numeroDocumento || null,
         telefono: dto.telefono || null,
         unidadId: dto.unidadId || null,
+        active: true, // Por defecto activo
       });
 
       // Crear cuenta
@@ -194,10 +195,26 @@ export class CondominiosUsersService {
   /**
    * Obtiene todos los usuarios de un condominio
    */
-  async getUsersInCondominio(condominioId: string) {
+  async getUsersInCondominio(
+    condominioId: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      role?: string;
+      active?: boolean;
+    },
+  ) {
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Migrar esquema si es necesario para asegurar que el campo active existe
+    await this.schemaMigrationService.migrateSchema(condominioPrisma);
+
+    if (filters && (filters.page || filters.limit || filters.search || filters.role || filters.active !== undefined)) {
+      return this.usersRepository.findAllWithPagination(condominioPrisma, filters);
+    }
 
     return this.usersRepository.findAll(condominioPrisma);
   }
@@ -209,6 +226,9 @@ export class CondominiosUsersService {
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Migrar esquema si es necesario para asegurar que el campo active existe
+    await this.schemaMigrationService.migrateSchema(condominioPrisma);
 
     const user = await this.usersRepository.findById(condominioPrisma, userId);
 
@@ -368,6 +388,7 @@ export class CondominiosUsersService {
     if (dto.numeroDocumento !== undefined) updates.numeroDocumento = dto.numeroDocumento;
     if (dto.telefono !== undefined) updates.telefono = dto.telefono;
     if (dto.unidadId !== undefined) updates.unidadId = dto.unidadId;
+    if (dto.active !== undefined) updates.active = dto.active;
     if (imageUrl !== undefined) updates.image = imageUrl;
 
     return this.usersRepository.update(condominioPrisma, userId, updates);
@@ -561,7 +582,7 @@ export class CondominiosUsersService {
           const sessions = await condominioPrisma.$queryRaw<any[]>`
             SELECT s.*, u.id as "userId", u.email, u.name, u.role, u."emailVerified", u.image, 
                    u."firstName", u."lastName", u."tipoDocumento", u."numeroDocumento", 
-                   u."telefono", u."unidadId",
+                   u."telefono", u."unidadId", u.active,
                    u."createdAt" as "userCreatedAt", u."updatedAt" as "userUpdatedAt"
             FROM "session" s
             INNER JOIN "user" u ON s."userId" = u.id
@@ -585,6 +606,7 @@ export class CondominiosUsersService {
                 numeroDocumento: sessionData.numeroDocumento || null,
                 telefono: sessionData.telefono || null,
                 unidadId: sessionData.unidadId || null,
+                active: sessionData.active !== undefined ? sessionData.active : true,
                 createdAt: sessionData.userCreatedAt,
                 updatedAt: sessionData.userUpdatedAt,
               },
