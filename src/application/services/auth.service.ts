@@ -7,10 +7,14 @@ import { LoginSuperadminDto } from "../../domain/dto/auth/superadmin/login-super
 import { APIError } from "better-auth/api";
 import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "src/config/auth/auth";
+import { CondominiosUsersService } from "./condominios-users.service";
 
 @Injectable()
 export class AuthService {
-  constructor(@Inject(PrismaClient) private prisma: PrismaClient) {}
+  constructor(
+    @Inject(PrismaClient) private prisma: PrismaClient,
+    private condominiosUsersService: CondominiosUsersService,
+  ) {}
 
   async registerSuperadmin(dto: RegisterSuperadminDto, req: Request) {
     try {
@@ -153,6 +157,82 @@ export class AuthService {
         throw error;
       }
       throw new ForbiddenException('No autenticado - sesión no encontrada');
+    }
+  }
+
+  /**
+   * Cierra la sesión del superadmin actual
+   */
+  async logoutSuperadmin(req: Request) {
+    try {
+      const headers = fromNodeHeaders(req.headers);
+      const result = await auth.api.signOut({
+        headers,
+        returnHeaders: true,
+      });
+
+      return {
+        data: { message: 'Sesión cerrada exitosamente' },
+        headers: result.headers,
+      };
+    } catch (error) {
+      // Incluso si hay error, intentar limpiar la cookie
+      throw new BadRequestException('Error al cerrar sesión');
+    }
+  }
+
+  /**
+   * Cierra la sesión unificada (funciona para superadmin y usuarios de condominios)
+   */
+  async logout(req: Request) {
+    try {
+      // Intentar detectar si es superadmin o usuario de condominio
+      const headers = fromNodeHeaders(req.headers);
+      
+      // Primero intentar como superadmin (Better Auth)
+      try {
+        const session = await auth.api.getSession({ headers });
+        if (session?.user?.id) {
+          // Es superadmin, usar Better Auth para cerrar sesión
+          const result = await auth.api.signOut({
+            headers,
+            returnHeaders: true,
+          });
+          return {
+            data: { message: 'Sesión cerrada exitosamente' },
+            headers: result.headers,
+            type: 'superadmin',
+          };
+        }
+      } catch (error) {
+        // No es superadmin o no hay sesión de Better Auth, continuar
+      }
+
+      // Intentar como usuario de condominio
+      try {
+        await this.condominiosUsersService.logoutUserInCondominio(req);
+        return {
+          data: { message: 'Sesión cerrada exitosamente' },
+          headers: undefined,
+          type: 'condominio',
+        };
+      } catch (error) {
+        // No es usuario de condominio o no hay sesión
+      }
+
+      // Si llegamos aquí, no hay sesión activa, pero igualmente limpiar cookie
+      return {
+        data: { message: 'Sesión cerrada exitosamente' },
+        headers: undefined,
+        type: 'none',
+      };
+    } catch (error) {
+      // En caso de error, igualmente retornar éxito para limpiar cookie
+      return {
+        data: { message: 'Sesión cerrada exitosamente' },
+        headers: undefined,
+        type: 'error',
+      };
     }
   }
 }

@@ -26,12 +26,12 @@ import { swaggerOperations } from 'src/config/swagger/swagger.config';
 import { swaggerExamples } from 'src/config/swagger/swagger-examples';
 
 @ApiTags('auth')
-@Controller('superadmin')
+@Controller()
 @AllowAnonymous() // Permitir acceso sin autenticación para estos endpoints
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
+  @Post('superadmin/register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: swaggerOperations.auth.register.summary,
@@ -59,7 +59,7 @@ export class AuthController {
     return res.json(result.data || result);
   }
 
-  @Post('login')
+  @Post('superadmin/login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: swaggerOperations.auth.login.summary,
@@ -87,7 +87,7 @@ export class AuthController {
     return res.json(result.data || result);
   }
 
-  @Get('me')
+  @Get('superadmin/me')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: swaggerOperations.auth.getCurrentUser.summary,
@@ -107,6 +107,57 @@ export class AuthController {
   })
   async getCurrentUser(@Req() req: Request) {
     return this.authService.getCurrentUser(req);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cerrar sesión (unificado)',
+    description: 'Cierra la sesión del usuario actual (superadmin o usuario de condominio) y elimina la cookie de sesión. Funciona automáticamente para ambos tipos de usuarios.',
+  })
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Sesión cerrada exitosamente',
+    schema: {
+      example: {
+        message: 'Sesión cerrada exitosamente',
+      },
+    },
+  })
+  async logout(@Req() req: Request, @Res() res: Response) {
+    const result = await this.authService.logout(req);
+    
+    // Establecer headers de Better Auth si existen
+    if (result.headers) {
+      this.setCookiesFromHeaders(result.headers, res);
+    }
+    
+    // Limpiar la cookie manualmente también (para ambos casos)
+    res.clearCookie('better-auth.session_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+    
+    return res.json(result.data);
+  }
+
+  @Post('superadmin/logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cerrar sesión de superadmin (legacy)',
+    description: 'Cierra la sesión del superadmin actual. Este endpoint está deprecado, usa /logout en su lugar.',
+    deprecated: true,
+  })
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Sesión cerrada exitosamente',
+  })
+  async logoutSuperadmin(@Req() req: Request, @Res() res: Response) {
+    return this.logout(req, res);
   }
 
   /**

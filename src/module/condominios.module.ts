@@ -38,7 +38,7 @@ import { UnidadesController } from 'src/controllers/unidades.controller';
     S3Service,
     ImageProcessingService,
   ],
-  exports: [CondominiosService, DatabaseManagerService],
+  exports: [CondominiosService, CondominiosUsersService, DatabaseManagerService],
 })
 export class CondominiosModule {}
 

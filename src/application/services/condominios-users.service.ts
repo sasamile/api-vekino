@@ -519,6 +519,40 @@ export class CondominiosUsersService {
   /**
    * Extrae el subdominio del request basado en el header Host
    */
+  /**
+   * Cierra la sesión del usuario actual de condominio
+   */
+  async logoutUserInCondominio(req: Request): Promise<{ message: string }> {
+    const subdomain = this.extractSubdomainFromRequest(req);
+    
+    if (!subdomain) {
+      throw new BadRequestException('No se pudo identificar el condominio');
+    }
+
+    const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
+    const condominioPrisma = await this.condominiosService.getPrismaClientForCondominio(condominio.id);
+
+    // Obtener el token de sesión desde la cookie
+    const cookieName = 'better-auth.session_token';
+    let sessionToken: string | null = null;
+
+    if ((req as any).cookies && (req as any).cookies[cookieName]) {
+      sessionToken = (req as any).cookies[cookieName];
+    } else if (req.headers.cookie) {
+      const cookies = this.parseCookies(req.headers.cookie);
+      sessionToken = cookies[cookieName] || null;
+    }
+
+    if (sessionToken) {
+      // Eliminar la sesión de la base de datos del condominio
+      await condominioPrisma.$executeRaw`
+        DELETE FROM "session" WHERE token = ${sessionToken}
+      `;
+    }
+
+    return { message: 'Sesión cerrada exitosamente' };
+  }
+
   private extractSubdomainFromRequest(req?: any): string | null {
     if (!req) {
       return null;
