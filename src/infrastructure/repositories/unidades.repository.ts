@@ -218,6 +218,16 @@ export class UnidadesRepository {
   }
 
   /**
+   * Cuenta el total de unidades
+   */
+  async count(prisma: PrismaClient): Promise<number> {
+    const result = await prisma.$queryRaw<any[]>`
+      SELECT COUNT(*) as total FROM "unidad"
+    `;
+    return parseInt(result[0]?.total || '0', 10);
+  }
+
+  /**
    * Elimina una unidad
    */
   async delete(prisma: PrismaClient, unidadId: string) {

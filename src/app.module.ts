@@ -3,6 +3,7 @@ import { AuthModule as BetterAuthModule } from "@thallesp/nestjs-better-auth";
 import { auth } from "./config/auth/auth";
 import { AuthModule } from "./module/auth.module";
 import { CondominiosModule } from "./module/condominios.module";
+import { MetricsModule } from "./module/metrics.module";
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { CondominiosModule } from "./module/condominios.module";
     }),
     AuthModule,
     CondominiosModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}
