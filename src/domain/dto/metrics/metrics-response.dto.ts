@@ -34,6 +34,9 @@ export class AlertTenantDto {
   @ApiProperty({ example: '2025-12-31T00:00:00.000Z', nullable: true })
   planExpiresAt: Date | null;
 
+  @ApiProperty({ example: 5, nullable: true, description: 'Días restantes hasta el vencimiento' })
+  daysUntilExpiration?: number | null;
+
   @ApiProperty({ example: { used: 120, limit: 150 }, nullable: true })
   usage?: { used: number; limit: number | null } | null;
 }

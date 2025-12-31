@@ -56,11 +56,23 @@ export class MetricsService {
     }).length;
 
     // Calcular MRR (Monthly Recurring Revenue) usando precios desde BD
+    // Solo contar condominios activos y con plan no vencido
     const planPrices = await this.planPricingService.getActivePricesMap();
     const mrr = condominios
-      .filter((c) => c.isActive && c.subscriptionPlan)
+      .filter((c) => {
+        // Debe estar activo
+        if (!c.isActive) return false;
+        
+        // Si tiene fecha de vencimiento, debe estar vigente
+        if (c.planExpiresAt) {
+          const expiresAt = new Date(c.planExpiresAt);
+          if (expiresAt < now) return false; // Plan vencido
+        }
+        
+        return true;
+      })
       .reduce((total, c) => {
-        const planPrice = planPrices[c.subscriptionPlan as SubscriptionPlan] || 0;
+        const planPrice = planPrices[(c.subscriptionPlan || 'BASICO') as SubscriptionPlan] || 0;
         return total + planPrice;
       }, 0);
 
@@ -112,22 +124,54 @@ export class MetricsService {
     const alerts: AlertDto[] = [];
 
     if (expiringCondominios.length > 0) {
-      // Enriquecer con información adicional
+      // Enriquecer con información adicional incluyendo días restantes
       const expiringTenants: AlertTenantDto[] = await Promise.all(
-        expiringCondominios.map(async (c) => ({
-          id: c.id,
-          name: c.name,
-          subdomain: c.subdomain
-            ? `${c.subdomain}.vekino.site`
-            : null,
-          planExpiresAt: c.planExpiresAt,
-          usage: null,
-        })),
+        expiringCondominios.map(async (c) => {
+          let daysUntilExpiration: number | null = null;
+          if (c.planExpiresAt) {
+            const expiresAt = new Date(c.planExpiresAt);
+            const diffTime = expiresAt.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            daysUntilExpiration = diffDays > 0 ? diffDays : 0;
+          }
+
+          return {
+            id: c.id,
+            name: c.name,
+            subdomain: c.subdomain
+              ? `${c.subdomain}.vekino.site`
+              : null,
+            planExpiresAt: c.planExpiresAt,
+            daysUntilExpiration,
+            usage: null,
+          };
+        }),
       );
+
+      // Determinar el rango de días para el título
+      const daysUntilExpirationList = expiringTenants
+        .map((t) => t.daysUntilExpiration)
+        .filter((d): d is number => d !== null && d !== undefined);
+      
+      const minDays = Math.min(...daysUntilExpirationList);
+      const maxDays = Math.max(...daysUntilExpirationList);
+      
+      let title = 'Tenants con plan por vencer';
+      if (minDays === maxDays) {
+        if (minDays === 0) {
+          title = 'Tenants con plan vencido';
+        } else if (minDays === 1) {
+          title = 'Tenants con plan por vencer mañana';
+        } else {
+          title = `Tenants con plan por vencer en ${minDays} días`;
+        }
+      } else {
+        title = `Tenants con plan por vencer en los próximos ${maxDays} días`;
+      }
 
       alerts.push({
         type: 'expiring_plan' as const,
-        title: 'Tenants con plan por vencer en 7 días',
+        title,
         count: expiringCondominios.length,
         actionText: 'Ver detalles',
         tenants: expiringTenants,
@@ -338,53 +382,91 @@ export class MetricsService {
    */
   async getMRRGrowth(): Promise<MRRGrowthDto> {
     const now = new Date();
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
 
     const allCondominios = await this.condominiosRepository.findAllWithPagination({
       limit: 10000,
     });
 
-    // Generar todos los meses de los últimos 6 meses
-    const months: string[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date(now);
-      date.setMonth(date.getMonth() - i);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      months.push(monthKey);
-    }
-
-    const monthlyMRR: Record<string, number> = {};
-
-    months.forEach((month) => {
-      monthlyMRR[month] = 0;
-    });
-
     // Obtener precios desde BD
     const planPrices = await this.planPricingService.getActivePricesMap();
 
-    // Calcular MRR para cada mes basado en condominios activos en ese momento
-    // Nota: Esto es una aproximación. Para un cálculo más preciso, necesitarías
-    // un historial de cambios de estado y planes.
-    allCondominios.data.forEach((c) => {
-      const createdAt = new Date(c.createdAt);
-      const monthKey = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+    // Generar todos los meses de los últimos 6 meses (sin duplicados)
+    const months: string[] = [];
+    const monthsSet = new Set<string>();
+    
+    for (let i = 5; i >= 0; i--) {
+      let year = currentYear;
+      let month = currentMonth - i;
+      
+      // Ajustar año si el mes es negativo
+      while (month < 0) {
+        year -= 1;
+        month += 12;
+      }
+      
+      // Ajustar año si el mes es mayor a 11
+      while (month > 11) {
+        year += 1;
+        month -= 12;
+      }
+      
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      // Solo agregar si no está duplicado
+      if (!monthsSet.has(monthKey)) {
+        monthsSet.add(monthKey);
+        months.push(monthKey);
+      }
+    }
 
-      // Si el condominio está activo y fue creado antes o durante el mes
-      if (c.isActive && createdAt <= now) {
+    // Ordenar los meses
+    const sortedMonths = months.sort();
+
+    const monthlyMRR: Record<string, number> = {};
+
+    // Inicializar todos los meses con 0
+    sortedMonths.forEach((month) => {
+      monthlyMRR[month] = 0;
+    });
+
+    // Calcular MRR para cada mes
+    sortedMonths.forEach((monthKey) => {
+      // Parsear el mes para obtener año y mes
+      const [yearStr, monthStr] = monthKey.split('-');
+      const monthYear = parseInt(yearStr, 10);
+      const monthNum = parseInt(monthStr, 10) - 1; // Convertir a 0-11
+      const monthStart = new Date(monthYear, monthNum, 1);
+      const monthEnd = new Date(monthYear, monthNum + 1, 0, 23, 59, 59, 999);
+
+      // Calcular MRR para este mes específico
+      allCondominios.data.forEach((c) => {
+        // Solo contar condominios activos
+        if (!c.isActive) return;
+
+        const createdAt = new Date(c.createdAt);
+        
+        // El condominio debe haber sido creado antes o durante este mes
+        if (createdAt > monthEnd) return;
+
+        // Verificar si el plan está vencido en este mes
+        if (c.planExpiresAt) {
+          const expiresAt = new Date(c.planExpiresAt);
+          // Si el plan vence antes del inicio del mes, no contar
+          if (expiresAt < monthStart) return;
+        }
+
+        // Obtener el precio del plan
         const planPrice =
           planPrices[(c.subscriptionPlan || 'BASICO') as SubscriptionPlan] || 0;
 
-        // Agregar MRR a todos los meses desde su creación
-        months.forEach((m) => {
-          if (m >= monthKey) {
-            monthlyMRR[m] = (monthlyMRR[m] || 0) + planPrice;
-          }
-        });
-      }
+        // Agregar al MRR del mes
+        monthlyMRR[monthKey] = (monthlyMRR[monthKey] || 0) + planPrice;
+      });
     });
 
-    const data = months.map((month) => ({
+    const data = sortedMonths.map((month) => ({
       month,
       mrr: monthlyMRR[month] || 0,
     }));
