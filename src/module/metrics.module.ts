@@ -7,9 +7,13 @@ import { PrismaProvider } from '../config/prisma.provider';
 import { DatabaseManagerService } from '../config/database-manager.service';
 import { RoleGuard } from '../config/guards/require-role.guard';
 import { CondominiosModule } from './condominios.module';
+import { PlanPricingModule } from './plan-pricing.module';
 
 @Module({
-  imports: [forwardRef(() => CondominiosModule)],
+  imports: [
+    forwardRef(() => CondominiosModule),
+    PlanPricingModule,
+  ],
   controllers: [MetricsController],
   providers: [
     MetricsService,

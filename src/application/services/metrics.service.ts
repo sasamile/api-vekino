@@ -17,13 +17,7 @@ import {
   CityDistributionResponseDto,
 } from '../../domain/dto/metrics/metrics-response.dto';
 import { SubscriptionPlan } from '../../domain/dto/condominios/create-condominio.dto';
-
-// Precios mensuales por plan (en pesos colombianos)
-const PLAN_PRICES: Record<SubscriptionPlan, number> = {
-  BASICO: 50000,
-  PRO: 100000,
-  ENTERPRISE: 200000,
-};
+import { PlanPricingService } from './plan-pricing.service';
 
 @Injectable()
 export class MetricsService {
@@ -32,6 +26,7 @@ export class MetricsService {
     private readonly databaseManager: DatabaseManagerService,
     private readonly condominiosService: CondominiosService,
     private readonly unidadesRepository: UnidadesRepository,
+    private readonly planPricingService: PlanPricingService,
   ) {}
 
   /**
@@ -60,11 +55,12 @@ export class MetricsService {
       return expiresAt <= sevenDaysFromNow && expiresAt > now;
     }).length;
 
-    // Calcular MRR (Monthly Recurring Revenue)
+    // Calcular MRR (Monthly Recurring Revenue) usando precios desde BD
+    const planPrices = await this.planPricingService.getActivePricesMap();
     const mrr = condominios
       .filter((c) => c.isActive && c.subscriptionPlan)
       .reduce((total, c) => {
-        const planPrice = PLAN_PRICES[c.subscriptionPlan as SubscriptionPlan] || 0;
+        const planPrice = planPrices[c.subscriptionPlan as SubscriptionPlan] || 0;
         return total + planPrice;
       }, 0);
 
@@ -247,37 +243,57 @@ export class MetricsService {
    */
   async getCondominiosByMonth(): Promise<CondominiosByMonthDto> {
     const now = new Date();
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
 
     const allCondominios = await this.condominiosRepository.findAllWithPagination({
       limit: 10000,
     });
 
-    const condominios = allCondominios.data.filter((c) => {
-      const createdAt = new Date(c.createdAt);
-      return createdAt >= sixMonthsAgo;
-    });
-
     // Agrupar por mes
     const monthlyData: Record<string, number> = {};
 
-    condominios.forEach((c) => {
+    allCondominios.data.forEach((c) => {
       const createdAt = new Date(c.createdAt);
-      const monthKey = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}`;
+      const year = createdAt.getFullYear();
+      const month = createdAt.getMonth() + 1; // getMonth() retorna 0-11
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
       monthlyData[monthKey] = (monthlyData[monthKey] || 0) + 1;
     });
 
-    // Generar todos los meses de los últimos 6 meses
+    // Generar todos los meses de los últimos 6 meses (incluyendo el mes actual)
     const months: string[] = [];
+    const monthsSet = new Set<string>();
+    
     for (let i = 5; i >= 0; i--) {
-      const date = new Date(now);
-      date.setMonth(date.getMonth() - i);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      months.push(monthKey);
+      let year = currentYear;
+      let month = currentMonth - i;
+      
+      // Ajustar año si el mes es negativo
+      while (month < 0) {
+        year -= 1;
+        month += 12;
+      }
+      
+      // Ajustar año si el mes es mayor a 11
+      while (month > 11) {
+        year += 1;
+        month -= 12;
+      }
+      
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      // Solo agregar si no está duplicado
+      if (!monthsSet.has(monthKey)) {
+        monthsSet.add(monthKey);
+        months.push(monthKey);
+      }
     }
 
-    const data = months.map((month) => ({
+    // Ordenar los meses para asegurar orden cronológico
+    const sortedMonths = months.sort();
+
+    const data = sortedMonths.map((month) => ({
       month,
       count: monthlyData[month] || 0,
     }));
@@ -344,6 +360,9 @@ export class MetricsService {
       monthlyMRR[month] = 0;
     });
 
+    // Obtener precios desde BD
+    const planPrices = await this.planPricingService.getActivePricesMap();
+
     // Calcular MRR para cada mes basado en condominios activos en ese momento
     // Nota: Esto es una aproximación. Para un cálculo más preciso, necesitarías
     // un historial de cambios de estado y planes.
@@ -354,7 +373,7 @@ export class MetricsService {
       // Si el condominio está activo y fue creado antes o durante el mes
       if (c.isActive && createdAt <= now) {
         const planPrice =
-          PLAN_PRICES[(c.subscriptionPlan || 'BASICO') as SubscriptionPlan] || 0;
+          planPrices[(c.subscriptionPlan || 'BASICO') as SubscriptionPlan] || 0;
 
         // Agregar MRR a todos los meses desde su creación
         months.forEach((m) => {

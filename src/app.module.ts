@@ -4,6 +4,7 @@ import { auth } from "./config/auth/auth";
 import { AuthModule } from "./module/auth.module";
 import { CondominiosModule } from "./module/condominios.module";
 import { MetricsModule } from "./module/metrics.module";
+import { PlanPricingModule } from "./module/plan-pricing.module";
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { MetricsModule } from "./module/metrics.module";
     AuthModule,
     CondominiosModule,
     MetricsModule,
+    PlanPricingModule,
   ],
 })
 export class AppModule {}

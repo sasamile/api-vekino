@@ -164,3 +164,19 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
+
+model PlanPricing {
+  id            String           @id @default(uuid())
+  plan          SubscriptionPlan @unique
+  monthlyPrice  Float            // Precio mensual en pesos colombianos
+  yearlyPrice   Float?           // Precio anual (opcional, puede tener descuento)
+  description   String?          // Descripción del plan
+  features      String?           // JSON: ["feature1", "feature2"] - Características del plan
+  isActive      Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([plan])
+  @@index([isActive])
+  @@map("plan_pricing")
+}
