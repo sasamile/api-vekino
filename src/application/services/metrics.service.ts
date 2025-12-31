@@ -8,6 +8,7 @@ import {
   MetricsOverviewDto,
   AlertsDto,
   AlertDto,
+  AlertTenantDto,
   TenantListItemDto,
   TenantsListDto,
   CondominiosByMonthDto,
@@ -115,20 +116,51 @@ export class MetricsService {
     const alerts: AlertDto[] = [];
 
     if (expiringCondominios.length > 0) {
+      // Enriquecer con información adicional
+      const expiringTenants: AlertTenantDto[] = await Promise.all(
+        expiringCondominios.map(async (c) => ({
+          id: c.id,
+          name: c.name,
+          subdomain: c.subdomain
+            ? `${c.subdomain}.vekino.site`
+            : null,
+          planExpiresAt: c.planExpiresAt,
+          usage: null,
+        })),
+      );
+
       alerts.push({
         type: 'expiring_plan' as const,
         title: 'Tenants con plan por vencer en 7 días',
         count: expiringCondominios.length,
         actionText: 'Ver detalles',
+        tenants: expiringTenants,
       });
     }
 
     if (exceededLimitCondominios.length > 0) {
+      // Enriquecer con información de uso
+      const exceededTenants: AlertTenantDto[] = await Promise.all(
+        exceededLimitCondominios.map(async (c) => {
+          const usage = await this.getUnitUsage(c.id);
+          return {
+            id: c.id,
+            name: c.name,
+            subdomain: c.subdomain
+              ? `${c.subdomain}.vekino.site`
+              : null,
+            planExpiresAt: c.planExpiresAt,
+            usage,
+          };
+        }),
+      );
+
       alerts.push({
         type: 'unit_limit_exceeded' as const,
         title: 'Tenants excedieron límite de unidades',
         count: exceededLimitCondominios.length,
         actionText: 'Ver detalles',
+        tenants: exceededTenants,
       });
     }
 

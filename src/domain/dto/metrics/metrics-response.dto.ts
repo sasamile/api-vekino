@@ -21,6 +21,23 @@ export class MetricsOverviewDto {
   churn: number;
 }
 
+export class AlertTenantDto {
+  @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655440000' })
+  id: string;
+
+  @ApiProperty({ example: 'Condominio Las Flores' })
+  name: string;
+
+  @ApiProperty({ example: 'lasflores.vekino.site', nullable: true })
+  subdomain: string | null;
+
+  @ApiProperty({ example: '2025-12-31T00:00:00.000Z', nullable: true })
+  planExpiresAt: Date | null;
+
+  @ApiProperty({ example: { used: 120, limit: 150 }, nullable: true })
+  usage?: { used: number; limit: number | null } | null;
+}
+
 export class AlertDto {
   @ApiProperty({ example: 'expiring_plan', description: 'Tipo de alerta' })
   type: 'expiring_plan' | 'unit_limit_exceeded';
@@ -33,6 +50,9 @@ export class AlertDto {
 
   @ApiProperty({ example: 'Ver detalles', description: 'Texto del botón de acción' })
   actionText: string;
+
+  @ApiProperty({ type: [AlertTenantDto], description: 'Lista de tenants afectados' })
+  tenants: AlertTenantDto[];
 }
 
 export class AlertsDto {
