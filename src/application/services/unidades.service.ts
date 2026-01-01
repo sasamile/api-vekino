@@ -83,20 +83,93 @@ export class UnidadesService {
   /**
    * Obtiene todas las unidades con sus usuarios asociados
    */
-  async getUnidadesWithResidentes(condominioId: string) {
+  async getUnidadesWithResidentes(
+    condominioId: string,
+    filters?: {
+      userActive?: boolean;
+      identificador?: string;
+      nombre?: string;
+      numeroDocumento?: string;
+    },
+  ) {
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
-    // Obtener todas las unidades
-    const unidades = await this.unidadesRepository.findAllBasic(condominioPrisma);
+    // Obtener todas las unidades (con filtro por identificador si aplica)
+    let unidades = await this.unidadesRepository.findAllBasic(condominioPrisma);
 
-    // Para cada unidad, obtener sus usuarios
+    // Filtrar por identificador si se proporciona
+    if (filters?.identificador) {
+      unidades = unidades.filter((u) =>
+        u.identificador
+          .toLowerCase()
+          .includes(filters.identificador!.toLowerCase()),
+      );
+    }
+
+    // Para cada unidad, obtener sus usuarios con filtros aplicados directamente en la consulta
     const unidadesConResidentes = await Promise.all(
       unidades.map(async (unidad) => {
-        const usuarios = await this.unidadesRepository.findUsersByUnidadId(
-          condominioPrisma,
-          unidad.id,
+        // Construir condiciones WHERE dinámicamente
+        const condiciones: string[] = [];
+        const params: any[] = [unidad.id];
+        let paramIndex = 2;
+
+        condiciones.push(`"unidadId" = $1`);
+
+        // Aplicar filtro de active si se proporciona
+        if (filters?.userActive !== undefined) {
+          condiciones.push(`active = $${paramIndex}`);
+          params.push(filters.userActive);
+          paramIndex++;
+        }
+
+        // Aplicar filtro de nombre si se proporciona
+        if (filters?.nombre) {
+          const searchPattern = `%${filters.nombre.toLowerCase()}%`;
+          condiciones.push(`(
+            LOWER(COALESCE(name, '')) LIKE $${paramIndex} OR
+            LOWER(COALESCE("firstName", '')) LIKE $${paramIndex} OR
+            LOWER(COALESCE("lastName", '')) LIKE $${paramIndex} OR
+            LOWER(CONCAT(COALESCE("firstName", ''), ' ', COALESCE("lastName", ''))) LIKE $${paramIndex} OR
+            LOWER(CONCAT(COALESCE(name, ''), ' ', COALESCE("firstName", ''), ' ', COALESCE("lastName", ''))) LIKE $${paramIndex}
+          )`);
+          params.push(searchPattern);
+          paramIndex++;
+        }
+
+        // Aplicar filtro de número de documento si se proporciona
+        if (filters?.numeroDocumento) {
+          condiciones.push(`LOWER(COALESCE("numeroDocumento", '')) LIKE $${paramIndex}`);
+          params.push(`%${filters.numeroDocumento.toLowerCase()}%`);
+          paramIndex++;
+        }
+
+        const whereClause = condiciones.join(' AND ');
+
+        // Ejecutar la consulta usando queryRawUnsafe con parámetros seguros
+        const usuarios = await condominioPrisma.$queryRawUnsafe<any[]>(
+          `
+          SELECT 
+            id,
+            name,
+            "firstName",
+            "lastName",
+            email,
+            "tipoDocumento",
+            "numeroDocumento",
+            telefono,
+            role,
+            "unidadId",
+            active,
+            "createdAt"::text as "createdAt",
+            "updatedAt"::text as "updatedAt"
+          FROM "user"
+          WHERE ${whereClause}
+          ORDER BY "firstName" ASC, "lastName" ASC
+          `,
+          ...params,
         );
 
         return {
@@ -107,7 +180,13 @@ export class UnidadesService {
       }),
     );
 
-    return unidadesConResidentes;
+    // Si hay filtros de usuarios, solo retornar unidades que tengan usuarios que cumplan los filtros
+    const hasUserFilters = filters?.userActive !== undefined || filters?.nombre || filters?.numeroDocumento;
+    const unidadesFiltradas = unidadesConResidentes.filter(
+      (u) => !hasUserFilters || u.totalUsuarios > 0,
+    );
+
+    return unidadesFiltradas;
   }
 
   /**

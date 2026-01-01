@@ -7,6 +7,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -20,11 +21,13 @@ import {
   ApiBody,
   ApiBearerAuth,
   ApiCookieAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { Subdomain } from 'src/config/decorators/subdomain.decorator';
 import { CreateUnidadDto } from 'src/domain/dto/condominios/create-unidad.dto';
 import { UpdateUnidadDto } from 'src/domain/dto/condominios/update-unidad.dto';
 import { BulkUploadUnidadesDto } from 'src/domain/dto/condominios/bulk-upload-unidades.dto';
+import { QueryUnidadesWithResidentesDto } from 'src/domain/dto/condominios/query-unidades-with-residentes.dto';
 import { CondominiosService } from 'src/application/services/condominios.service';
 import { UnidadesService } from 'src/application/services/unidades.service';
 import { RequireCondominioAccess, RequireRole, RoleGuard } from 'src/config/guards/require-role.guard';
@@ -87,7 +90,35 @@ export class UnidadesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: swaggerOperations.unidades.findAllWithResidentes.summary,
-    description: swaggerOperations.unidades.findAllWithResidentes.description,
+    description: swaggerOperations.unidades.findAllWithResidentes.description + ' Incluye filtros opcionales por estado de usuario, identificador de unidad, nombre y número de documento.',
+  })
+  @ApiQuery({
+    name: 'userActive',
+    required: false,
+    type: Boolean,
+    description: 'Filtrar por estado de usuario (true = activos, false = inactivos)',
+    example: true,
+  })
+  @ApiQuery({
+    name: 'identificador',
+    required: false,
+    type: String,
+    description: 'Filtrar por identificador de unidad (utilidad)',
+    example: 'Apto 801',
+  })
+  @ApiQuery({
+    name: 'nombre',
+    required: false,
+    type: String,
+    description: 'Buscar por nombre de usuario',
+    example: 'Juan Pérez',
+  })
+  @ApiQuery({
+    name: 'numeroDocumento',
+    required: false,
+    type: String,
+    description: 'Buscar por número de documento',
+    example: '1234567890',
   })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
@@ -99,9 +130,17 @@ export class UnidadesController {
     status: 403,
     description: swaggerOperations.unidades.findAllWithResidentes.responses[403].description,
   })
-  async findAllWithResidentes(@Subdomain() subdomain: string | null) {
+  async findAllWithResidentes(
+    @Subdomain() subdomain: string | null,
+    @Query() query: QueryUnidadesWithResidentesDto,
+  ) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
-    return this.unidadesService.getUnidadesWithResidentes(condominioId);
+    return this.unidadesService.getUnidadesWithResidentes(condominioId, {
+      userActive: query.userActive,
+      identificador: query.identificador,
+      nombre: query.nombre,
+      numeroDocumento: query.numeroDocumento,
+    });
   }
 
   @Get()
