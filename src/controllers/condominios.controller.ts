@@ -840,16 +840,15 @@ export class CondominiosController {
     return this.condominiosService.validateSubdomain(subdomain);
   }
 
-  // Obtener información completa del condominio por subdominio (para admin)
+  // Obtener información completa del condominio por subdominio (público - se usa antes del login)
   @ApiTags('condominios')
   @Get('info')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(RoleGuard)
-  @RequireRole(['SUPERADMIN', 'ADMIN'])
+  @AllowAnonymous()
   @ApiOperation({
     summary: 'Obtener información completa del condominio por subdominio',
     description:
-      'Retorna la información completa del condominio (logo, colores, datos institucionales, plan, etc.) mediante subdominio. Requiere autenticación como ADMIN o SUPERADMIN.',
+      'Retorna la información completa del condominio (logo, colores, datos institucionales, plan, etc.) mediante subdominio. Endpoint público que se usa antes del login.',
   })
   @ApiQuery({
     name: 'subdomain',
@@ -858,8 +857,6 @@ export class CondominiosController {
     description: 'Subdominio del condominio',
     example: 'condominio-las-flores-actualizado',
   })
-  @ApiBearerAuth('JWT-auth')
-  @ApiCookieAuth('better-auth.session_token')
   @ApiResponse({
     status: 200,
     description: 'Información completa del condominio',
@@ -890,8 +887,8 @@ export class CondominiosController {
     description: 'Subdominio no proporcionado o condominio no encontrado',
   })
   @ApiResponse({
-    status: 403,
-    description: 'No autorizado - se requiere rol ADMIN o SUPERADMIN',
+    status: 404,
+    description: 'Condominio no encontrado',
   })
   async getInfoBySubdomain(@Query('subdomain') subdomain: string) {
     if (!subdomain) {
