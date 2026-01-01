@@ -72,11 +72,26 @@ export class UnidadesService {
   /**
    * Obtiene todas las unidades de un condominio
    */
-  async getUnidades(condominioId: string) {
+  async getUnidades(
+    condominioId: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      identificador?: string;
+      tipo?: string;
+      estado?: string;
+    },
+  ) {
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
+    // Si hay filtros o paginación, usar findAllWithPagination
+    if (filters && (filters.page || filters.limit || filters.identificador || filters.tipo || filters.estado)) {
+      return this.unidadesRepository.findAllWithPagination(condominioPrisma, filters);
+    }
+
+    // Si no hay filtros, retornar todas sin paginación
     return this.unidadesRepository.findAll(condominioPrisma);
   }
 

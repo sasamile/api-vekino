@@ -87,6 +87,98 @@ export class UnidadesRepository {
   }
 
   /**
+   * Busca todas las unidades con paginación y filtros
+   */
+  async findAllWithPagination(
+    prisma: PrismaClient,
+    filters: {
+      page?: number;
+      limit?: number;
+      identificador?: string;
+      tipo?: string;
+      estado?: string;
+    },
+  ) {
+    const page = filters.page || 1;
+    const limit = filters.limit || 10;
+    const skip = (page - 1) * limit;
+
+    // Construir condiciones WHERE dinámicamente
+    const condiciones: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (filters.identificador) {
+      condiciones.push(`LOWER(u.identificador) LIKE $${paramIndex}`);
+      params.push(`%${filters.identificador.toLowerCase()}%`);
+      paramIndex++;
+    }
+
+    if (filters.tipo) {
+      condiciones.push(`u.tipo = $${paramIndex}::"TipoUnidad"`);
+      params.push(filters.tipo);
+      paramIndex++;
+    }
+
+    if (filters.estado) {
+      condiciones.push(`u.estado = $${paramIndex}::"EstadoUnidad"`);
+      params.push(filters.estado);
+      paramIndex++;
+    }
+
+    const whereClause = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : '';
+
+    // Consulta para contar total (usando subconsulta para evitar problemas con GROUP BY)
+    const countQuery = `
+      SELECT COUNT(DISTINCT u.id) as total
+      FROM "unidad" u
+      ${whereClause}
+    `;
+
+    const countResult = await prisma.$queryRawUnsafe<any[]>(
+      countQuery,
+      ...params,
+    );
+    const total = parseInt(countResult[0]?.total || '0', 10);
+
+    // Consulta para obtener datos con paginación
+    // Necesitamos construir la consulta con parámetros correctos para LIMIT y OFFSET
+    const limitParam = paramIndex;
+    const offsetParam = paramIndex + 1;
+    const dataQuery = `
+      SELECT 
+        u.id,
+        u.identificador,
+        u.tipo,
+        u.area,
+        u."coeficienteCopropiedad",
+        u."valorCuotaAdministracion",
+        u.estado,
+        u."createdAt"::text as "createdAt",
+        u."updatedAt"::text as "updatedAt",
+        COUNT(us.id)::int as "totalUsuarios"
+      FROM "unidad" u
+      LEFT JOIN "user" us ON u.id = us."unidadId"
+      ${whereClause}
+      GROUP BY u.id, u.identificador, u.tipo, u.area, u."coeficienteCopropiedad",
+               u."valorCuotaAdministracion", u.estado, u."createdAt", u."updatedAt"
+      ORDER BY u.identificador ASC
+      LIMIT $${limitParam} OFFSET $${offsetParam}
+    `;
+
+    const queryParams = [...params, limit, skip];
+    const data = await prisma.$queryRawUnsafe<any[]>(dataQuery, ...queryParams);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
    * Busca todas las unidades sin agrupar (para obtener con usuarios)
    */
   async findAllBasic(prisma: PrismaClient) {

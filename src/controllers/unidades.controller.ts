@@ -28,6 +28,7 @@ import { CreateUnidadDto } from 'src/domain/dto/condominios/create-unidad.dto';
 import { UpdateUnidadDto } from 'src/domain/dto/condominios/update-unidad.dto';
 import { BulkUploadUnidadesDto } from 'src/domain/dto/condominios/bulk-upload-unidades.dto';
 import { QueryUnidadesWithResidentesDto } from 'src/domain/dto/condominios/query-unidades-with-residentes.dto';
+import { QueryUnidadesDto } from 'src/domain/dto/condominios/query-unidades.dto';
 import { CondominiosService } from 'src/application/services/condominios.service';
 import { UnidadesService } from 'src/application/services/unidades.service';
 import { RequireCondominioAccess, RequireRole, RoleGuard } from 'src/config/guards/require-role.guard';
@@ -147,7 +148,42 @@ export class UnidadesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: swaggerOperations.unidades.findAll.summary,
-    description: swaggerOperations.unidades.findAll.description,
+    description: swaggerOperations.unidades.findAll.description + ' Incluye filtros opcionales por identificador, tipo y estado, así como paginación.',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Número de página',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Cantidad de resultados por página',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'identificador',
+    required: false,
+    type: String,
+    description: 'Filtrar por identificador de unidad (búsqueda parcial)',
+    example: 'Apto 801',
+  })
+  @ApiQuery({
+    name: 'tipo',
+    required: false,
+    enum: ['APARTAMENTO', 'CASA', 'LOCAL_COMERCIAL'],
+    description: 'Filtrar por tipo de unidad',
+    example: 'APARTAMENTO',
+  })
+  @ApiQuery({
+    name: 'estado',
+    required: false,
+    enum: ['OCUPADA', 'VACIA', 'EN_MANTENIMIENTO'],
+    description: 'Filtrar por estado de unidad',
+    example: 'OCUPADA',
   })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
@@ -160,9 +196,18 @@ export class UnidadesController {
     status: 403,
     description: swaggerOperations.unidades.findAll.responses[403].description,
   })
-  async findAll(@Subdomain() subdomain: string | null) {
+  async findAll(
+    @Subdomain() subdomain: string | null,
+    @Query() query: QueryUnidadesDto,
+  ) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
-    return this.unidadesService.getUnidades(condominioId);
+    return this.unidadesService.getUnidades(condominioId, {
+      page: query.page,
+      limit: query.limit,
+      identificador: query.identificador,
+      tipo: query.tipo,
+      estado: query.estado,
+    });
   }
 
   @Get(':unidadId')
