@@ -404,6 +404,33 @@ export class CondominiosService {
   }
 
   /**
+   * Obtiene la información completa del condominio por subdominio
+   */
+  async getCondominioInfoBySubdomain(subdomain: string) {
+    const condominioData = await this.findCondominioBySubdomain(subdomain);
+
+    return {
+      id: condominioData.id,
+      name: condominioData.name,
+      subdomain: condominioData.subdomain,
+      logo: condominioData.logo,
+      primaryColor: condominioData.primaryColor || '#3B82F6',
+      nit: condominioData.nit,
+      address: condominioData.address,
+      city: condominioData.city,
+      country: condominioData.country,
+      timezone: condominioData.timezone,
+      subscriptionPlan: condominioData.subscriptionPlan,
+      unitLimit: condominioData.unitLimit,
+      planExpiresAt: condominioData.planExpiresAt,
+      activeModules: condominioData.activeModules ? JSON.parse(condominioData.activeModules) : [],
+      isActive: condominioData.isActive,
+      createdAt: condominioData.createdAt,
+      updatedAt: condominioData.updatedAt,
+    };
+  }
+
+  /**
    * Valida si un subdominio está disponible
    */
   async validateSubdomain(
