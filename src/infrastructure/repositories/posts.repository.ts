@@ -14,8 +14,8 @@ export class PostsRepository {
       params.push(userId);
       userLikedSubquery = `(
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END::int
-        FROM "post_like" pl
-        WHERE pl."postId" = p.id AND pl."userId" = $2
+        FROM "post_reaction" pr
+        WHERE pr."postId" = p.id AND pr."userId" = $2
       )`;
     }
 
@@ -50,8 +50,8 @@ export class PostsRepository {
         ) as "comentariosCount",
         (
           SELECT COUNT(*)::int
-          FROM "post_like" pl
-          WHERE pl."postId" = p.id
+          FROM "post_reaction" pr
+          WHERE pr."postId" = p.id
         ) as "likesCount",
         ${userLikedSubquery} as "userLiked"
       FROM "post" p
@@ -124,8 +124,8 @@ export class PostsRepository {
       queryParams.push(currentUserId);
       userLikedSubquery = `(
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END::int
-        FROM "post_like" pl
-        WHERE pl."postId" = p.id AND pl."userId" = $${paramIndex + 3}
+        FROM "post_reaction" pr
+        WHERE pr."postId" = p.id AND pr."userId" = $${paramIndex + 3}
       )`;
     }
 
@@ -160,8 +160,8 @@ export class PostsRepository {
         ) as "comentariosCount",
         (
           SELECT COUNT(*)::int
-          FROM "post_like" pl
-          WHERE pl."postId" = p.id
+          FROM "post_reaction" pr
+          WHERE pr."postId" = p.id
         ) as "likesCount",
         ${userLikedSubquery} as "userLiked"
       FROM "post" p
@@ -346,12 +346,12 @@ export class PostsRepository {
   }
 
   /**
-   * Verifica si un usuario ya dio like a un post
+   * Verifica si un usuario ya dio reacción a un post
    */
   async hasUserLiked(prisma: PrismaClient, postId: string, userId: string): Promise<boolean> {
     const result = await prisma.$queryRaw<any[]>`
       SELECT COUNT(*)::int as count
-      FROM "post_like"
+      FROM "post_reaction"
       WHERE "postId" = ${postId} AND "userId" = ${userId}
       LIMIT 1
     `;
@@ -359,13 +359,13 @@ export class PostsRepository {
   }
 
   /**
-   * Agrega un like a un post
+   * Agrega un like a un post (mantiene compatibilidad con el nombre del método)
    */
   async addLike(prisma: PrismaClient, postId: string, userId: string) {
     await prisma.$executeRaw`
-      INSERT INTO "post_like" (id, "postId", "userId", "createdAt")
-      VALUES (gen_random_uuid(), ${postId}, ${userId}, NOW())
-      ON CONFLICT ("postId", "userId") DO NOTHING
+      INSERT INTO "post_reaction" (id, "postId", "userId", tipo, "createdAt")
+      VALUES (gen_random_uuid(), ${postId}, ${userId}, 'LIKE', NOW())
+      ON CONFLICT ("postId", "userId") DO UPDATE SET tipo = 'LIKE', "createdAt" = NOW()
     `;
   }
 
@@ -374,7 +374,7 @@ export class PostsRepository {
    */
   async removeLike(prisma: PrismaClient, postId: string, userId: string) {
     await prisma.$executeRaw`
-      DELETE FROM "post_like"
+      DELETE FROM "post_reaction"
       WHERE "postId" = ${postId} AND "userId" = ${userId}
     `;
   }

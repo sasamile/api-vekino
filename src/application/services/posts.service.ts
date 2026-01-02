@@ -77,25 +77,32 @@ export class PostsService {
    * Obtiene todos los posts con filtros
    */
   async findAllPosts(condominioId: string, query: QueryPostsDto, userId?: string) {
-    const condominio = await this.condominiosService.findOne(condominioId);
-    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
-    const condominioPrisma =
-      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+    try {
+      const condominio = await this.condominiosService.findOne(condominioId);
+      await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
+      const condominioPrisma =
+        await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
-    // Convertir activo de string a boolean si viene como string
-    let activo: boolean | undefined = query.activo;
-    if (typeof query.activo === 'string') {
-      activo = query.activo === 'true';
+      // Convertir activo de string a boolean si viene como string
+      let activo: boolean | undefined = query.activo;
+      if (typeof query.activo === 'string') {
+        activo = query.activo === 'true';
+      }
+
+      const filters: any = {
+        page: query.page,
+        limit: query.limit,
+        userId: query.userId,
+        activo: activo !== undefined ? activo : true,
+      };
+
+      return await this.postsRepository.findAll(condominioPrisma, filters, userId);
+    } catch (error: any) {
+      console.error('Error en findAllPosts:', error);
+      console.error('Stack:', error.stack);
+      console.error('Query params:', { condominioId, query, userId });
+      throw error;
     }
-
-    const filters: any = {
-      page: query.page,
-      limit: query.limit,
-      userId: query.userId,
-      activo: activo !== undefined ? activo : true,
-    };
-
-    return await this.postsRepository.findAll(condominioPrisma, filters, userId);
   }
 
   /**
