@@ -7,6 +7,7 @@ import { CondominiosModule } from "./module/condominios.module";
 import { MetricsModule } from "./module/metrics.module";
 import { PlanPricingModule } from "./module/plan-pricing.module";
 import { FinanzasModule } from "./module/finanzas.module";
+import { AdminMetricsModule } from "./module/admin-metrics.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { FinanzasModule } from "./module/finanzas.module";
     MetricsModule,
     PlanPricingModule,
     FinanzasModule,
+    AdminMetricsModule,
   ],
 })
 export class AppModule {}

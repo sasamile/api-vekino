@@ -10,3 +10,4 @@ export class MarcarPagoCompletadoDto {
   observaciones?: string;
 }
 
+
