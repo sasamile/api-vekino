@@ -8,6 +8,8 @@ import { MetricsModule } from "./module/metrics.module";
 import { PlanPricingModule } from "./module/plan-pricing.module";
 import { FinanzasModule } from "./module/finanzas.module";
 import { AdminMetricsModule } from "./module/admin-metrics.module";
+import { ReportesModule } from "./module/reportes.module";
+import { ComunicacionModule } from "./module/comunicacion.module";
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { AdminMetricsModule } from "./module/admin-metrics.module";
     PlanPricingModule,
     FinanzasModule,
     AdminMetricsModule,
+    ReportesModule,
+    ComunicacionModule,
   ],
 })
 export class AppModule {}

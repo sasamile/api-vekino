@@ -37,6 +37,11 @@ model User {
   reservas         Reserva[]
   facturas         Factura[]
   pagos            Pago[]
+  tickets          Ticket[]
+  ticketComments   TicketComment[]
+  posts            Post[]
+  postComments     PostComment[]
+  postLikes        PostLike[]
 
   @@unique([email])
   @@unique([numeroDocumento])
@@ -159,6 +164,13 @@ enum MetodoPago {
   EFECTIVO
 }
 
+enum EstadoTicket {
+  ABIERTO
+  EN_PROGRESO
+  RESUELTO
+  CERRADO
+}
+
 model Unidad {
   id                        String        @id @default(uuid())
   identificador             String        // Ej: "Casa 127", "Apto 801"
@@ -172,6 +184,8 @@ model Unidad {
   users                     User[]
   reservas                  Reserva[]
   facturas                  Factura[]
+  tickets                   Ticket[]
+  posts                     Post[]
 
   @@unique([identificador])
   @@map("unidad")
@@ -292,5 +306,106 @@ model Pago {
   @@index([wompiTransactionId])
   @@index([wompiReference])
   @@map("pago")
+}
+
+// Tickets de administración (solicitudes de mantenimiento, problemas, etc.)
+model Ticket {
+  id                String          @id @default(uuid())
+  titulo            String          // Título del ticket
+  descripcion       String          // Descripción detallada del problema/solicitud
+  estado            EstadoTicket     @default(ABIERTO)
+  categoria         String?         // Categoría del ticket (ej: "Iluminación", "Poda", "Limpieza")
+  prioridad         String?         @default("MEDIA") // BAJA, MEDIA, ALTA, URGENTE
+  userId            String          // Usuario que creó el ticket
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unidadId          String?         // Unidad relacionada (opcional)
+  unidad            Unidad?         @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  asignadoA         String?         // ID del usuario ADMIN asignado al ticket
+  fechaResolucion   DateTime?       // Fecha en que se resolvió el ticket
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  comments          TicketComment[] // Comentarios del ticket
+
+  @@index([userId])
+  @@index([unidadId])
+  @@index([estado])
+  @@index([categoria])
+  @@index([asignadoA])
+  @@index([createdAt])
+  @@map("ticket")
+}
+
+// Comentarios en tickets
+model TicketComment {
+  id                String          @id @default(uuid())
+  ticketId          String
+  ticket            Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contenido         String          // Contenido del comentario
+  esInterno         Boolean         @default(false) // Si es true, solo lo ven los ADMIN
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ticket_comment")
+}
+
+// Posts del foro comunitario
+model Post {
+  id                String          @id @default(uuid())
+  titulo            String?         // Título del post (opcional)
+  contenido         String          // Contenido del post
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unidadId          String?         // Unidad del usuario que creó el post (opcional, para mostrar "Casa 89")
+  unidad            Unidad?         @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  imagen            String?         // URL de imagen adjunta (opcional)
+  activo            Boolean         @default(true) // Si está activo o eliminado
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  comments          PostComment[]   // Comentarios del post
+  likes             PostLike[]      // Likes del post
+
+  @@index([userId])
+  @@index([unidadId])
+  @@index([activo])
+  @@index([createdAt])
+  @@map("post")
+}
+
+// Comentarios en posts del foro
+model PostComment {
+  id                String          @id @default(uuid())
+  postId            String
+  post              Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contenido         String          // Contenido del comentario
+  activo            Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([postId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("post_comment")
+}
+
+// Likes en posts del foro
+model PostLike {
+  id                String          @id @default(uuid())
+  postId            String
+  post              Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([postId, userId]) // Un usuario solo puede dar like una vez por post
+  @@index([postId])
+  @@index([userId])
+  @@map("post_like")
 }
 
