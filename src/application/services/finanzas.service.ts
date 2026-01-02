@@ -449,7 +449,7 @@ export class FinanzasService {
         );
 
         // Construir el link de pago
-        // Wompi generalmente proporciona un redirect_url o podemos usar el payment_link_id
+        // Wompi proporciona el redirect_url directamente en la respuesta del payment link
         const paymentLink = wompiResponse.data.redirect_url || 
           (wompiResponse.data.payment_link_id 
             ? `https://checkout.wompi.co/l/${wompiResponse.data.payment_link_id}`

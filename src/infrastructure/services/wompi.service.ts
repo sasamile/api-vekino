@@ -243,36 +243,28 @@ export class WompiService {
 
       this.logger.log(`Creando link de pago en Wompi para referencia: ${reference}`);
 
-      // Para crear un link de pago, necesitamos crear una transacción
-      // El payment_method puede ser opcional o especificar solo el tipo
-      const paymentRequest: any = {
-        amount_in_cents: amountInCents,
+      // Para crear un link de pago en Wompi, debemos usar el endpoint /payment_links
+      // Este endpoint requiere campos específicos diferentes a las transacciones
+      const paymentLinkRequest: any = {
+        name: `Pago Factura ${reference}`,
+        description: `Pago de factura ${reference} - ${customerName}`,
+        single_use: true,
+        collect_shipping: false,
         currency: currency || 'COP',
-        customer_email: customerEmail,
-        reference: reference,
-        customer_data: {
-          email: customerEmail,
-          full_name: customerName,
-        },
+        amount_in_cents: amountInCents,
       };
 
       // Agregar redirect_url si está disponible
       if (redirectUrl) {
-        paymentRequest.redirect_url = redirectUrl;
+        paymentLinkRequest.redirect_url = redirectUrl;
       }
 
-      // Para links de pago, podemos especificar el método de pago o dejarlo abierto
-      // Intentamos primero sin especificar el método completo para generar un link
-      paymentRequest.payment_method = {
-        type: 'CARD',
-      };
+      this.logger.debug(`Payment link request: ${JSON.stringify(paymentLinkRequest, null, 2)}`);
 
-      this.logger.debug(`Payment request: ${JSON.stringify(paymentRequest, null, 2)}`);
-
-      // Intentar crear la transacción que generará un link de pago
-      const response = await this.axiosInstance.post<WompiPaymentResponse>(
-        '/transactions',
-        paymentRequest,
+      // Crear el payment link usando el endpoint correcto
+      const linkResponse = await this.axiosInstance.post<any>(
+        '/payment_links',
+        paymentLinkRequest,
         {
           headers: {
             Authorization: `Bearer ${this.privateKey}`,
@@ -280,11 +272,41 @@ export class WompiService {
         },
       );
 
+      // El response de payment_links tiene una estructura diferente
+      // Necesitamos adaptar la respuesta al formato esperado
+      const paymentLinkData = linkResponse.data.data;
+      
+      // Crear una respuesta compatible con WompiPaymentResponse
+      const response: WompiPaymentResponse = {
+        data: {
+          id: paymentLinkData.id || paymentLinkData.uuid,
+          status: 'PENDING',
+          amount_in_cents: amountInCents,
+          currency: currency || 'COP',
+          customer_email: customerEmail,
+          payment_method: {
+            type: 'CARD',
+            extra: {
+              bin: '',
+              name: '',
+              brand: '',
+              exp_year: '',
+              exp_month: '',
+              card_holder: '',
+            },
+          },
+          reference: reference,
+          payment_link_id: paymentLinkData.id || paymentLinkData.uuid,
+          redirect_url: paymentLinkData.url || paymentLinkData.checkout_url,
+          created_at: paymentLinkData.created_at || new Date().toISOString(),
+        },
+      };
+
       this.logger.log(
-        `Link de pago creado exitosamente. ID: ${response.data.data.id}, Status: ${response.data.data.status}`,
+        `Link de pago creado exitosamente. ID: ${response.data.id}, Status: ${response.data.status}`,
       );
 
-      return response.data;
+      return response;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error?.message || error.message;
       const errorDetails = error.response?.data || {};
@@ -322,7 +344,7 @@ export class WompiService {
         
         // Formatear los mensajes de validación
         const formattedErrors: string[] = [];
-        if (typeof validationMessages === 'object') {
+        if (typeof validationMessages === 'object' && validationMessages !== null) {
           Object.keys(validationMessages).forEach((field) => {
             const fieldErrors = Array.isArray(validationMessages[field])
               ? validationMessages[field]
@@ -333,20 +355,31 @@ export class WompiService {
           });
         }
         
-        const errorMsg = formattedErrors.length > 0
+        // Si no hay mensajes formateados, intentar obtener el mensaje del error
+        let errorMsg = formattedErrors.length > 0
           ? formattedErrors.join('; ')
-          : errorMessage || 'Error de validación desconocido';
+          : errorMessage || JSON.stringify(errorData) || 'Error de validación desconocido';
         
+        // Log completo para debugging
         this.logger.error('Error 422 - Detalles completos:', {
           errorData,
           validationMessages,
           formattedErrors,
-          fullResponse: errorDetails,
+          fullResponse: JSON.stringify(errorDetails, null, 2),
+          requestSent: JSON.stringify({
+            reference,
+            amount: amountInCents,
+            email: customerEmail,
+            name: customerName,
+          }, null, 2),
         });
         
-        throw new BadRequestException(
-          `Error al crear link de pago en Wompi (422): ${errorMsg}`,
-        );
+        // Lanzar excepción con todos los detalles disponibles
+        const fullErrorMsg = `Error al crear link de pago en Wompi (422): ${errorMsg}`;
+        const exception = new BadRequestException(fullErrorMsg);
+        (exception as any).wompiError = errorDetails;
+        (exception as any).wompiValidationErrors = formattedErrors;
+        throw exception;
       }
 
       throw new BadRequestException(
