@@ -60,47 +60,97 @@ export class RoleGuard implements CanActivate {
     // Si no hay roles requeridos, aún necesitamos obtener el usuario si existe una sesión
     // para que los controladores puedan acceder a req.user
     if (!requiredRoles || requiredRoles.length === 0) {
-      // Intentar obtener el usuario de la sesión si existe
-      try {
-        const headers = fromNodeHeaders(request.headers);
-        const session = await auth.api.getSession({ headers });
-        
-        if (session?.user?.id) {
-          // Detectar subdominio
-          let subdomain = (request as any).subdomain;
-          if (!subdomain) {
-            const host = request.headers.host || (request as any).hostname;
-            if (host) {
-              const hostWithoutPort = host.split(':')[0];
-              const parts = hostWithoutPort.split('.');
-              if (parts.length === 2 && parts[1] === 'localhost') {
-                subdomain = parts[0];
-              }
-            }
-          }
-          
-          if (subdomain) {
-            // Buscar usuario en la BD del condominio
-            try {
-              const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
-              const condominioPrisma = await this.condominiosService.getPrismaClientForCondominio(condominio.id);
-              const users = await condominioPrisma.$queryRaw<any[]>`
-                SELECT * FROM "user" WHERE id = ${session.user.id} LIMIT 1
-              `;
-              if (users[0]) {
-                (request as any).user = users[0];
-                (request as any).session = session;
-                console.log('✅ Usuario establecido en request para endpoint sin roles requeridos:', users[0].email);
-              }
-            } catch (error) {
-              console.error('❌ Error al buscar usuario en BD del condominio (sin roles requeridos):', error);
-              // Si falla, continuar sin establecer usuario (acceso público)
-            }
+      // Detectar subdominio primero
+      let subdomain = (request as any).subdomain;
+      if (!subdomain) {
+        const host = request.headers.host || (request as any).hostname;
+        if (host) {
+          const hostWithoutPort = host.split(':')[0];
+          const parts = hostWithoutPort.split('.');
+          if (parts.length === 2 && parts[1] === 'localhost') {
+            subdomain = parts[0];
           }
         }
-      } catch (error) {
-        // Si falla al obtener sesión, continuar sin establecer usuario (acceso público)
-        console.log('ℹ️ No se pudo obtener sesión (sin roles requeridos), permitiendo acceso público');
+      }
+      
+      if (subdomain) {
+        // Para usuarios de condominio, las sesiones están en la BD del condominio
+        try {
+          const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
+          const condominioPrisma = await this.condominiosService.getPrismaClientForCondominio(condominio.id);
+          
+          // Obtener el token de la cookie
+          const cookieName = 'better-auth.session_token';
+          let sessionToken: string | null = null;
+          
+          if ((request as any).cookies && (request as any).cookies[cookieName]) {
+            sessionToken = (request as any).cookies[cookieName];
+          } else if (request.headers.cookie) {
+            const cookies = request.headers.cookie.split(';').reduce((acc: any, cookie: string) => {
+              const trimmed = cookie.trim();
+              const equalIndex = trimmed.indexOf('=');
+              if (equalIndex > 0) {
+                const key = trimmed.substring(0, equalIndex).trim();
+                const value = trimmed.substring(equalIndex + 1).trim();
+                if (key && value) {
+                  acc[key] = value;
+                }
+              }
+              return acc;
+            }, {});
+            sessionToken = cookies[cookieName] || null;
+          }
+          
+          if (sessionToken) {
+            // Buscar sesión en la BD del condominio
+            console.log('🔍 Buscando sesión en BD del condominio con token:', sessionToken.substring(0, 30) + '...');
+            const sessions = await condominioPrisma.$queryRaw<any[]>`
+              SELECT s.*, u.*
+              FROM "session" s
+              INNER JOIN "user" u ON s."userId" = u.id
+              WHERE s.token = ${sessionToken}
+                AND s."expiresAt" > CURRENT_TIMESTAMP
+              LIMIT 1
+            `;
+            
+            console.log('📊 Sesiones encontradas:', sessions.length);
+            if (sessions[0]) {
+              (request as any).user = sessions[0];
+              console.log('✅ Usuario establecido en request para endpoint sin roles requeridos:', sessions[0].email);
+            } else {
+              console.log('❌ No se encontró sesión válida en BD del condominio');
+              // Intentar buscar sin condición de expiración para debug
+              const expiredSessions = await condominioPrisma.$queryRaw<any[]>`
+                SELECT s.token, s."expiresAt"::text, CURRENT_TIMESTAMP::text as "now"
+                FROM "session" s
+                WHERE s.token = ${sessionToken}
+                LIMIT 1
+              `;
+              if (expiredSessions.length > 0) {
+                console.log('⚠️ Sesión encontrada pero expirada:', expiredSessions[0]);
+              } else {
+                console.log('❌ No existe ninguna sesión con ese token');
+              }
+            }
+          } else {
+            console.log('❌ No se encontró token de sesión en las cookies');
+          }
+        } catch (error) {
+          console.error('❌ Error al buscar sesión en BD del condominio (sin roles requeridos):', error);
+          // Si falla, continuar sin establecer usuario (acceso público)
+        }
+      } else {
+        // Sin subdominio, intentar con Better Auth (para SUPERADMIN)
+        try {
+          const headers = fromNodeHeaders(request.headers);
+          const session = await auth.api.getSession({ headers });
+          if (session?.user?.id) {
+            (request as any).user = session.user;
+            (request as any).session = session;
+          }
+        } catch (error) {
+          // Si falla, continuar sin establecer usuario (acceso público)
+        }
       }
       return true;
     }
