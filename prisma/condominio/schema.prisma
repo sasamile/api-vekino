@@ -34,6 +34,7 @@ model User {
   unidad           Unidad?   @relation(fields: [unidadId], references: [id], onDelete: SetNull)
   sessions         Session[]
   accounts         Account[]
+  reservas         Reserva[]
 
   @@unique([email])
   @@unique([numeroDocumento])
@@ -110,6 +111,31 @@ enum TipoDocumento {
   OTRO
 }
 
+enum TipoEspacio {
+  SALON_SOCIAL
+  ZONA_BBQ
+  SAUNA
+  CASA_EVENTOS
+  GIMNASIO
+  PISCINA
+  CANCHA_DEPORTIVA
+  PARQUEADERO
+  OTRO
+}
+
+enum UnidadTiempoReserva {
+  HORAS
+  DIAS
+  MESES
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+  COMPLETADA
+}
+
 model Unidad {
   id                        String        @id @default(uuid())
   identificador             String        // Ej: "Casa 127", "Apto 801"
@@ -121,8 +147,63 @@ model Unidad {
   createdAt                 DateTime      @default(now())
   updatedAt                 DateTime      @updatedAt
   users                     User[]
+  reservas                  Reserva[]
 
   @@unique([identificador])
   @@map("unidad")
+}
+
+// Espacios comunes disponibles para reserva (ej: Salón Social, Zona BBQ, Sauna)
+model EspacioComun {
+  id                String               @id @default(uuid())
+  nombre            String               // Ej: "Salón Social", "Zona BBQ"
+  tipo              TipoEspacio
+  capacidad         Int                  // Capacidad máxima de personas
+  descripcion       String?
+  unidadTiempo      UnidadTiempoReserva  // HORAS, DIAS o MESES
+  precioPorUnidad   Float?               // Precio por unidad de tiempo (opcional)
+  activo            Boolean              @default(true)
+  imagen            String?              // URL de imagen del espacio
+  // Horarios de disponibilidad (JSON: array de días de la semana y horas)
+  // Ejemplo: [{"dia": 1, "horaInicio": "09:00", "horaFin": "22:00"}, {"dia": 2, "horaInicio": "09:00", "horaFin": "22:00"}]
+  // día: 0=Domingo, 1=Lunes, ..., 6=Sábado
+  horariosDisponibilidad String?         // JSON string con horarios
+  requiereAprobacion    Boolean          @default(true) // Si requiere aprobación de ADMIN
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  reservas          Reserva[]
+
+  @@index([tipo])
+  @@index([activo])
+  @@map("espacio_comun")
+}
+
+// Reservas de espacios comunes
+model Reserva {
+  id                String        @id @default(uuid())
+  espacioComunId    String
+  espacioComun      EspacioComun @relation(fields: [espacioComunId], references: [id], onDelete: Restrict)
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unidadId          String?       // Unidad relacionada (opcional, para casas con espacios para eventos)
+  unidad            Unidad?       @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  fechaInicio       DateTime
+  fechaFin          DateTime
+  cantidadPersonas  Int?
+  estado            EstadoReserva @default(PENDIENTE)
+  motivo            String?       // Motivo de la reserva
+  observaciones     String?
+  precioTotal       Float?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  createdBy         String?       // ID del usuario que creó la reserva (puede ser admin)
+
+  @@index([espacioComunId])
+  @@index([userId])
+  @@index([unidadId])
+  @@index([fechaInicio])
+  @@index([fechaFin])
+  @@index([estado])
+  @@map("reserva")
 }
 
