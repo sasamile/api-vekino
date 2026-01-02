@@ -187,6 +187,29 @@ curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas' 
   }'
 ```
 
+**⚠️ IMPORTANTE - Formato de Fechas y Zona Horaria:**
+
+El sistema guarda las fechas en UTC. Para evitar problemas de conversión:
+
+- **Formato recomendado:** Enviar fechas con timezone offset explícito:
+  - Colombia (UTC-5): `"2026-01-02T11:00:00-05:00"` para las 11:00 AM hora local
+  - México (UTC-6): `"2026-01-02T11:00:00-06:00"` para las 11:00 AM hora local
+  - Perú (UTC-5): `"2026-01-02T11:00:00-05:00"` para las 11:00 AM hora local
+
+- **Formato UTC (también funciona):** `"2026-01-02T16:00:00Z"` (equivalente a 11:00 AM hora Colombia UTC-5)
+
+- **NO usar formato sin timezone:** `"2026-01-02T11:00:00"` puede causar problemas porque JavaScript lo interpreta como hora local y luego se convierte a UTC automáticamente.
+
+**Ejemplo correcto para Colombia:**
+```json
+{
+  "fechaInicio": "2026-01-02T11:00:00-05:00",
+  "fechaFin": "2026-01-02T12:00:00-05:00"
+}
+```
+
+Esto garantiza que se guarde como 11:00 AM hora Colombia y se muestre correctamente.
+
 **Campos opcionales:**
 - `unidadId`: Solo si es necesario relacionar con una unidad
 - `motivo`: Motivo de la reserva
@@ -233,6 +256,11 @@ curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas?ti
 # Filtrar por rango de fechas
 curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas?fechaDesde=2025-01-01T00:00:00.000Z&fechaHasta=2025-01-31T23:59:59.000Z' \
   -b cookies.txt
+
+# Filtrar por un día específico (el sistema normaliza automáticamente al inicio/fin del día)
+curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas?fechaDesde=2026-01-02T09:33:00.000Z&fechaHasta=2026-01-02T23:59:59.000Z' \
+  -b cookies.txt
+# Nota: fechaDesde se normaliza al inicio del día (00:00:00) y fechaHasta al final (23:59:59)
 
 # Solo mis reservas (para usuarios no admin)
 curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas?soloMias=true' \

@@ -101,14 +101,20 @@ export class ReservasRepository {
     }
 
     if (filters.fechaDesde) {
+      // Normalizar fechaDesde al inicio del día (00:00:00) para filtrar por día completo
+      const fechaDesde = new Date(filters.fechaDesde);
+      fechaDesde.setHours(0, 0, 0, 0);
       condiciones.push(`r."fechaInicio" >= $${paramIndex}`);
-      params.push(filters.fechaDesde);
+      params.push(fechaDesde.toISOString());
       paramIndex++;
     }
 
     if (filters.fechaHasta) {
-      condiciones.push(`r."fechaFin" <= $${paramIndex}`);
-      params.push(filters.fechaHasta);
+      // Normalizar fechaHasta al final del día (23:59:59) para filtrar por día completo
+      const fechaHasta = new Date(filters.fechaHasta);
+      fechaHasta.setHours(23, 59, 59, 999);
+      condiciones.push(`r."fechaInicio" <= $${paramIndex}`);
+      params.push(fechaHasta.toISOString());
       paramIndex++;
     }
 
