@@ -156,9 +156,7 @@ enum EstadoPago {
 
 enum MetodoPago {
   WOMPI
-  TRANSFERENCIA
   EFECTIVO
-  OTRO
 }
 
 model Unidad {

@@ -6,6 +6,7 @@ import { FinanzasController } from '../controllers/finanzas.controller';
 import { RoleGuard } from 'src/config/guards/require-role.guard';
 import { CondominiosModule } from './condominios.module';
 import { PrismaProvider } from '../config/prisma.provider';
+import { DatabaseManagerService } from '../config/database-manager.service';
 
 @Module({
   imports: [forwardRef(() => CondominiosModule)],
@@ -19,6 +20,7 @@ import { PrismaProvider } from '../config/prisma.provider';
     WompiService,
     // Config Services
     PrismaProvider,
+    DatabaseManagerService,
     // Guards
     RoleGuard,
   ],

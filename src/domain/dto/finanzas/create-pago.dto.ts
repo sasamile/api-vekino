@@ -3,9 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum MetodoPago {
   WOMPI = 'WOMPI',
-  TRANSFERENCIA = 'TRANSFERENCIA',
   EFECTIVO = 'EFECTIVO',
-  OTRO = 'OTRO',
 }
 
 export class CreatePagoDto {

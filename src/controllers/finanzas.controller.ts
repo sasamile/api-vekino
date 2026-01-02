@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   Query,
@@ -32,6 +33,7 @@ import { CreatePagoDto } from 'src/domain/dto/finanzas/create-pago.dto';
 import { WompiWebhookDto } from 'src/domain/dto/finanzas/wompi-webhook.dto';
 import { FacturaResponseDto } from 'src/domain/dto/finanzas/factura-response.dto';
 import { PagoResponseDto } from 'src/domain/dto/finanzas/pago-response.dto';
+import { MarcarPagoCompletadoDto } from 'src/domain/dto/finanzas/marcar-pago-completado.dto';
 import { Request } from 'express';
 import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 
@@ -110,14 +112,14 @@ export class FinanzasController {
   @RequireRole('ADMIN')
   @ApiOperation({
     summary: 'Crear facturas masivas',
-    description: 'Crea facturas para todas las unidades activas o unidades específicas. Solo ADMIN.',
+    description: 'Crea facturas para todas las unidades activas usando su valorCuotaAdministracion. Solo requiere período, fecha de emisión y fecha límite de pago. Solo ADMIN.',
   })
   @ApiBody({ type: BulkCreateFacturasDto })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
   @ApiResponse({
     status: 201,
-    description: 'Facturas creadas exitosamente',
+    description: 'Facturas creadas exitosamente para todas las unidades activas',
   })
   @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
   async bulkCreateFacturas(
@@ -223,6 +225,46 @@ export class FinanzasController {
     return this.finanzasService.enviarFactura(condominioId, id, user?.id);
   }
 
+  /**
+   * Eliminar factura (ADMIN)
+   */
+  @Delete('facturas/:id')
+  @HttpCode(HttpStatus.OK)
+  @RequireRole('ADMIN')
+  @ApiOperation({
+    summary: 'Eliminar factura',
+    description: 'Elimina una factura. Solo se puede eliminar si no tiene pagos asociados. Solo ADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID de la factura',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Factura eliminada exitosamente',
+    schema: {
+      example: {
+        message: 'Factura eliminada exitosamente',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No se puede eliminar la factura porque tiene pagos asociados',
+  })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  @ApiResponse({ status: 404, description: 'Factura no encontrada' })
+  async deleteFactura(
+    @Subdomain() subdomain: string | null,
+    @Param('id') id: string,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.finanzasService.deleteFactura(condominioId, id);
+  }
+
   // ========== PAGOS ==========
 
   /**
@@ -285,6 +327,41 @@ export class FinanzasController {
   ) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     return this.finanzasService.consultarEstadoPago(condominioId, id);
+  }
+
+  /**
+   * Marcar pago como completado manualmente (ADMIN)
+   */
+  @Post('pagos/:id/completar')
+  @HttpCode(HttpStatus.OK)
+  @RequireRole('ADMIN')
+  @ApiOperation({
+    summary: 'Marcar pago como completado',
+    description: 'Marca un pago como completado manualmente. Útil para pagos en efectivo confirmados fuera del sistema. Solo ADMIN.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'ID del pago',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @ApiBody({ type: MarcarPagoCompletadoDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Pago marcado como completado exitosamente',
+    type: PagoResponseDto,
+  })
+  @ApiResponse({ status: 400, description: 'El pago ya está aprobado' })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  @ApiResponse({ status: 404, description: 'Pago no encontrado' })
+  async marcarPagoCompletado(
+    @Subdomain() subdomain: string | null,
+    @Param('id') id: string,
+    @Body() dto: MarcarPagoCompletadoDto,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.finanzasService.marcarPagoCompletado(condominioId, id, dto.observaciones);
   }
 
   // ========== WEBHOOK WOMPI ==========

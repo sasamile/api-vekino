@@ -132,6 +132,18 @@ export class DatabaseManagerService implements OnModuleDestroy {
           throw error;
         }
       }
+
+      // Verificar si las tablas de finanzas existen, si no, crearlas
+      try {
+        await prisma.$queryRaw`SELECT 1 FROM "factura" LIMIT 1`;
+        console.log('✅ Tabla factura ya existe');
+      } catch (error: any) {
+        if (error.message?.includes('does not exist') || error.code === '42P01') {
+          console.log('📝 Tabla factura no existe. Creando tablas de finanzas...');
+          await this.createMissingTablesWithPrisma(prisma);
+          console.log('✅ Tablas de finanzas creadas correctamente');
+        }
+      }
       
       console.log('✅ El esquema ya está inicializado en esta base de datos');
       return;
@@ -335,6 +347,9 @@ export class DatabaseManagerService implements OnModuleDestroy {
       { name: 'EstadoUnidad', values: ['OCUPADA', 'VACIA', 'EN_MANTENIMIENTO'] },
       { name: 'TipoDocumento', values: ['CC', 'CE', 'PASAPORTE', 'NIT', 'OTRO'] },
       { name: 'RolResidente', values: ['PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'] },
+      { name: 'EstadoFactura', values: ['PENDIENTE', 'ENVIADA', 'PAGADA', 'VENCIDA', 'CANCELADA'] },
+      { name: 'EstadoPago', values: ['PENDIENTE', 'PROCESANDO', 'APROBADO', 'RECHAZADO', 'CANCELADO'] },
+      { name: 'MetodoPago', values: ['WOMPI', 'EFECTIVO'] },
     ];
 
     for (const enumDef of enums) {
@@ -388,6 +403,50 @@ export class DatabaseManagerService implements OnModuleDestroy {
       );
     `);
 
+    // Crear tabla Factura
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "factura" (
+        "id" STRING NOT NULL,
+        "numeroFactura" STRING NOT NULL,
+        "unidadId" STRING NOT NULL,
+        "userId" STRING,
+        "periodo" STRING NOT NULL,
+        "fechaEmision" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "fechaVencimiento" TIMESTAMP(3) NOT NULL,
+        "valor" FLOAT NOT NULL,
+        "descripcion" STRING,
+        "estado" "EstadoFactura" NOT NULL DEFAULT 'PENDIENTE',
+        "fechaEnvio" TIMESTAMP(3),
+        "fechaPago" TIMESTAMP(3),
+        "observaciones" STRING,
+        "createdBy" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "factura_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla Pago
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "pago" (
+        "id" STRING NOT NULL,
+        "facturaId" STRING NOT NULL,
+        "userId" STRING,
+        "valor" FLOAT NOT NULL,
+        "metodoPago" "MetodoPago" NOT NULL DEFAULT 'WOMPI',
+        "estado" "EstadoPago" NOT NULL DEFAULT 'PENDIENTE',
+        "wompiTransactionId" STRING,
+        "wompiReference" STRING,
+        "wompiPaymentLink" STRING,
+        "wompiResponse" STRING,
+        "fechaPago" TIMESTAMP(3),
+        "observaciones" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "pago_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
     // Crear índices
     await Promise.all([
       prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "unidad_identificador_key" ON "unidad"("identificador");`),
@@ -397,6 +456,17 @@ export class DatabaseManagerService implements OnModuleDestroy {
       prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_userId_idx" ON "residente"("userId");`),
       prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_estado_idx" ON "residente"("estado");`),
       prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "residente_rol_idx" ON "residente"("rol");`),
+      prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "factura_numeroFactura_key" ON "factura"("numeroFactura");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "factura_unidadId_idx" ON "factura"("unidadId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "factura_userId_idx" ON "factura"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "factura_periodo_idx" ON "factura"("periodo");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "factura_estado_idx" ON "factura"("estado");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "factura_fechaVencimiento_idx" ON "factura"("fechaVencimiento");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "pago_facturaId_idx" ON "pago"("facturaId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "pago_userId_idx" ON "pago"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "pago_estado_idx" ON "pago"("estado");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "pago_wompiTransactionId_idx" ON "pago"("wompiTransactionId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "pago_wompiReference_idx" ON "pago"("wompiReference");`),
     ]);
 
     // Crear foreign keys
@@ -410,6 +480,38 @@ export class DatabaseManagerService implements OnModuleDestroy {
 
     try {
       await prisma.$executeRawUnsafe(`ALTER TABLE "residente" ADD CONSTRAINT IF NOT EXISTS "residente_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      if (!error.message?.includes('already exists') && error.code !== '42P16') {
+        // Ignorar si ya existe
+      }
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "factura" ADD CONSTRAINT IF NOT EXISTS "factura_unidadId_fkey" FOREIGN KEY ("unidadId") REFERENCES "unidad"("id") ON DELETE RESTRICT ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      if (!error.message?.includes('already exists') && error.code !== '42P16') {
+        // Ignorar si ya existe
+      }
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "factura" ADD CONSTRAINT IF NOT EXISTS "factura_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      if (!error.message?.includes('already exists') && error.code !== '42P16') {
+        // Ignorar si ya existe
+      }
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "pago" ADD CONSTRAINT IF NOT EXISTS "pago_facturaId_fkey" FOREIGN KEY ("facturaId") REFERENCES "factura"("id") ON DELETE RESTRICT ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      if (!error.message?.includes('already exists') && error.code !== '42P16') {
+        // Ignorar si ya existe
+      }
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "pago" ADD CONSTRAINT IF NOT EXISTS "pago_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;`);
     } catch (error: any) {
       if (!error.message?.includes('already exists') && error.code !== '42P16') {
         // Ignorar si ya existe

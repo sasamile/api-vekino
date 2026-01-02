@@ -1,7 +1,5 @@
-import { IsString, IsDateString, IsOptional, IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsDateString, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CreateFacturaDto } from './create-factura.dto';
 
 export class BulkCreateFacturasDto {
   @ApiProperty({
@@ -12,21 +10,18 @@ export class BulkCreateFacturasDto {
   periodo: string;
 
   @ApiProperty({
-    description: 'Fecha de vencimiento de las facturas',
+    description: 'Fecha de emisión/facturación (cuándo se envía la factura)',
+    example: '2026-01-01T00:00:00Z',
+  })
+  @IsDateString()
+  fechaEmision: string;
+
+  @ApiProperty({
+    description: 'Fecha límite de pago (fecha de vencimiento)',
     example: '2026-01-31T23:59:59Z',
   })
   @IsDateString()
   fechaVencimiento: string;
-
-  @ApiPropertyOptional({
-    description: 'Array de facturas específicas a crear. Si no se proporciona, se crean facturas para todas las unidades activas.',
-    type: [CreateFacturaDto],
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateFacturaDto)
-  @IsOptional()
-  facturas?: CreateFacturaDto[];
 
   @ApiPropertyOptional({
     description: 'Si es true, envía las facturas automáticamente a los usuarios',

@@ -10,9 +10,7 @@ export enum EstadoPago {
 
 export enum MetodoPago {
   WOMPI = 'WOMPI',
-  TRANSFERENCIA = 'TRANSFERENCIA',
   EFECTIVO = 'EFECTIVO',
-  OTRO = 'OTRO',
 }
 
 export class PagoResponseDto {
