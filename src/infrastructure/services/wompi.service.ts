@@ -84,9 +84,9 @@ export class WompiService {
   private readonly isTestMode: boolean;
 
   constructor() {
-    this.publicKey = process.env.WOMPI_PUBLIC_KEY || 'pub_test_FQpQe6Se7zTpgKT6BNFEI0GbdBUI2SG3';
-    this.privateKey = process.env.WOMPI_PRIVATE_KEY || 'prv_test_Uz9eJmlsuYjN0tJeTjUmU39yGLpMdnyG';
-    this.isTestMode = process.env.WOMPI_TEST_MODE === 'true' || !this.privateKey;
+    this.publicKey ='pub_test_FQpQe6Se7zTpgKT6BNFEI0GbdBUI2SG3';
+    this.privateKey = 'prv_test_Uz9eJmlsuYjN0tJeTjUmU39yGLpMdnyG';
+    this.isTestMode = true;
     
     // URL base de Wompi (sandbox o producción)
     this.baseUrl = this.isTestMode
@@ -95,6 +95,20 @@ export class WompiService {
 
     if (!this.publicKey) {
       this.logger.warn('WOMPI_PUBLIC_KEY no está configurado. Los pagos no funcionarán.');
+    }
+
+    if (!this.privateKey) {
+      this.logger.warn('WOMPI_PRIVATE_KEY no está configurado. Los pagos no funcionarán.');
+    }
+
+    this.logger.log(`Wompi configurado en modo: ${this.isTestMode ? 'SANDBOX (pruebas)' : 'PRODUCCIÓN'}`);
+    this.logger.log(`Base URL: ${this.baseUrl}`);
+    
+    // Advertencia si está usando credenciales por defecto
+    if (this.privateKey === 'prv_test_Uz9eJmlsuYjN0tJeTjUmU39yGLpMdnyG' || 
+        this.publicKey === 'pub_test_FQpQe6Se7zTpgKT6BNFEI0GbdBUI2SG3') {
+      this.logger.warn('⚠️  Estás usando credenciales de prueba por defecto. Estas pueden no ser válidas.');
+      this.logger.warn('⚠️  Configura WOMPI_PUBLIC_KEY y WOMPI_PRIVATE_KEY en tus variables de entorno con credenciales válidas de Wompi.');
     }
 
     this.axiosInstance = axios.create({
@@ -111,7 +125,12 @@ export class WompiService {
    */
   async createPayment(request: WompiPaymentRequest): Promise<WompiPaymentResponse> {
     try {
+      if (!this.privateKey) {
+        throw new BadRequestException('WOMPI_PRIVATE_KEY no está configurado. No se puede crear el pago.');
+      }
+
       this.logger.log(`Creando pago en Wompi para referencia: ${request.reference}`);
+      this.logger.debug(`Request: ${JSON.stringify(request, null, 2)}`);
 
       const response = await this.axiosInstance.post<WompiPaymentResponse>(
         '/transactions',
@@ -129,12 +148,42 @@ export class WompiService {
 
       return response.data;
     } catch (error: any) {
+      const errorMessage = error.response?.data?.error?.message || error.message;
+      const errorDetails = error.response?.data || {};
+      
       this.logger.error(
-        `Error al crear pago en Wompi: ${error.message}`,
-        error.response?.data,
+        `Error al crear pago en Wompi: ${errorMessage}`,
+        {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: errorDetails,
+          request: {
+            reference: request.reference,
+            amount: request.amount_in_cents,
+            email: request.customer_email,
+          },
+        },
       );
+
+      // Mensaje más específico según el tipo de error
+      if (error.response?.status === 401) {
+        const errorData = error.response?.data;
+        const errorDetail = errorData?.error?.message || errorData?.message || 'Credenciales inválidas';
+        
+        this.logger.error('Error 401 - Autenticación fallida con Wompi', {
+          privateKeyPrefix: this.privateKey?.substring(0, 10) + '...',
+          isTestMode: this.isTestMode,
+          baseUrl: this.baseUrl,
+          errorDetail,
+        });
+        
+        throw new BadRequestException(
+          `Error de autenticación con Wompi (401): ${errorDetail}. Verifique que WOMPI_PRIVATE_KEY esté configurado correctamente y que las credenciales sean válidas para el entorno ${this.isTestMode ? 'SANDBOX' : 'PRODUCCIÓN'}.`,
+        );
+      }
+
       throw new BadRequestException(
-        `Error al crear pago en Wompi: ${error.response?.data?.error?.message || error.message}`,
+        `Error al crear pago en Wompi: ${errorMessage}`,
       );
     }
   }
