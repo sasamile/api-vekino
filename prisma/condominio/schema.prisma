@@ -35,6 +35,8 @@ model User {
   sessions         Session[]
   accounts         Account[]
   reservas         Reserva[]
+  facturas         Factura[]
+  pagos            Pago[]
 
   @@unique([email])
   @@unique([numeroDocumento])
@@ -136,6 +138,29 @@ enum EstadoReserva {
   COMPLETADA
 }
 
+enum EstadoFactura {
+  PENDIENTE
+  ENVIADA
+  PAGADA
+  VENCIDA
+  CANCELADA
+}
+
+enum EstadoPago {
+  PENDIENTE
+  PROCESANDO
+  APROBADO
+  RECHAZADO
+  CANCELADO
+}
+
+enum MetodoPago {
+  WOMPI
+  TRANSFERENCIA
+  EFECTIVO
+  OTRO
+}
+
 model Unidad {
   id                        String        @id @default(uuid())
   identificador             String        // Ej: "Casa 127", "Apto 801"
@@ -148,6 +173,7 @@ model Unidad {
   updatedAt                 DateTime      @updatedAt
   users                     User[]
   reservas                  Reserva[]
+  facturas                  Factura[]
 
   @@unique([identificador])
   @@map("unidad")
@@ -201,9 +227,72 @@ model Reserva {
   @@index([espacioComunId])
   @@index([userId])
   @@index([unidadId])
+  @@index([espacioComunId])
+  @@index([userId])
+  @@index([unidadId])
   @@index([fechaInicio])
   @@index([fechaFin])
   @@index([estado])
   @@map("reserva")
+}
+
+// Facturas de administración mensual para unidades
+model Factura {
+  id                    String        @id @default(uuid())
+  numeroFactura         String        // Número único de factura (ej: "FAC-2026-001")
+  unidadId              String
+  unidad                Unidad        @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  userId                String?       // Usuario responsable del pago (propietario o arrendatario)
+  user                  User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  periodo               String        // Período de facturación (ej: "2026-01" para enero 2026)
+  fechaEmision          DateTime      @default(now())
+  fechaVencimiento      DateTime      // Fecha límite de pago
+  valor                 Float         // Valor de la cuota de administración
+  descripcion           String?       // Descripción de la factura
+  estado                EstadoFactura @default(PENDIENTE)
+  fechaEnvio            DateTime?     // Fecha en que se envió la factura al usuario
+  fechaPago             DateTime?     // Fecha en que se pagó
+  observaciones         String?       // Observaciones adicionales
+  createdBy             String?       // ID del usuario admin que creó la factura
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  pagos                 Pago[]        // Pagos asociados a esta factura
+
+  @@unique([numeroFactura])
+  @@index([unidadId])
+  @@index([userId])
+  @@index([periodo])
+  @@index([estado])
+  @@index([fechaVencimiento])
+  @@map("factura")
+}
+
+// Pagos realizados para facturas
+model Pago {
+  id                    String        @id @default(uuid())
+  facturaId             String
+  factura               Factura       @relation(fields: [facturaId], references: [id], onDelete: Restrict)
+  userId                String?       // Usuario que realizó el pago
+  user                  User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  valor                 Float         // Valor del pago
+  metodoPago            MetodoPago    @default(WOMPI)
+  estado                EstadoPago    @default(PENDIENTE)
+  // Información de Wompi
+  wompiTransactionId    String?       // ID de la transacción en Wompi
+  wompiReference        String?       // Referencia de pago en Wompi
+  wompiPaymentLink      String?       // Link de pago generado por Wompi
+  wompiResponse         String?       // Respuesta completa de Wompi (JSON)
+  // Información adicional
+  fechaPago             DateTime?     // Fecha en que se procesó el pago
+  observaciones         String?       // Observaciones del pago
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([facturaId])
+  @@index([userId])
+  @@index([estado])
+  @@index([wompiTransactionId])
+  @@index([wompiReference])
+  @@map("pago")
 }
 
