@@ -12,12 +12,14 @@ import { QueryTicketsDto } from '../../domain/dto/comunicacion/query-tickets.dto
 import { CreateTicketCommentDto } from '../../domain/dto/comunicacion/create-ticket-comment.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { TicketsRepository } from '../../infrastructure/repositories/tickets.repository';
+import { DatabaseManagerService } from '../../config/database-manager.service';
 
 @Injectable()
 export class TicketsService {
   constructor(
     private readonly condominiosService: CondominiosService,
     private readonly ticketsRepository: TicketsRepository,
+    private readonly databaseManager: DatabaseManagerService,
   ) {}
 
   /**
@@ -28,7 +30,8 @@ export class TicketsService {
     userId: string,
     dto: CreateTicketDto,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -69,7 +72,8 @@ export class TicketsService {
    * Obtiene todos los tickets con filtros
    */
   async findAllTickets(condominioId: string, query: QueryTicketsDto, userId?: string, userRole?: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -95,7 +99,8 @@ export class TicketsService {
    * Obtiene un ticket por ID
    */
   async findTicketById(condominioId: string, ticketId: string, userId?: string, userRole?: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -122,7 +127,8 @@ export class TicketsService {
     userId: string,
     userRole: string,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -178,7 +184,8 @@ export class TicketsService {
    * Elimina un ticket
    */
   async deleteTicket(condominioId: string, ticketId: string, userId: string, userRole: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -200,7 +207,8 @@ export class TicketsService {
    * Obtiene los comentarios de un ticket
    */
   async getTicketComments(condominioId: string, ticketId: string, userId?: string, userRole?: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -234,7 +242,8 @@ export class TicketsService {
     dto: CreateTicketCommentDto,
     userRole: string,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 

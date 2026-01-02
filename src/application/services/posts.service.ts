@@ -12,12 +12,14 @@ import { QueryPostsDto } from '../../domain/dto/comunicacion/query-posts.dto';
 import { CreatePostCommentDto } from '../../domain/dto/comunicacion/create-post-comment.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { PostsRepository } from '../../infrastructure/repositories/posts.repository';
+import { DatabaseManagerService } from '../../config/database-manager.service';
 
 @Injectable()
 export class PostsService {
   constructor(
     private readonly condominiosService: CondominiosService,
     private readonly postsRepository: PostsRepository,
+    private readonly databaseManager: DatabaseManagerService,
   ) {}
 
   /**
@@ -28,7 +30,8 @@ export class PostsService {
     userId: string,
     dto: CreatePostDto,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -74,7 +77,8 @@ export class PostsService {
    * Obtiene todos los posts con filtros
    */
   async findAllPosts(condominioId: string, query: QueryPostsDto, userId?: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -92,7 +96,8 @@ export class PostsService {
    * Obtiene un post por ID
    */
   async findPostById(condominioId: string, postId: string, userId?: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -114,7 +119,8 @@ export class PostsService {
     userId: string,
     userRole: string,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -144,7 +150,8 @@ export class PostsService {
    * Elimina un post (soft delete)
    */
   async deletePost(condominioId: string, postId: string, userId: string, userRole: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -166,7 +173,8 @@ export class PostsService {
    * Obtiene los comentarios de un post
    */
   async getPostComments(condominioId: string, postId: string) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -188,7 +196,8 @@ export class PostsService {
     userId: string,
     dto: CreatePostCommentDto,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
@@ -229,7 +238,8 @@ export class PostsService {
     postId: string,
     userId: string,
   ) {
-    await this.condominiosService.findOne(condominioId);
+    const condominio = await this.condominiosService.findOne(condominioId);
+    await this.databaseManager.initializeCondominioDatabase(condominio.databaseUrl);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 

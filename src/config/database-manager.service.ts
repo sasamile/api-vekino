@@ -144,6 +144,18 @@ export class DatabaseManagerService implements OnModuleDestroy {
           console.log('✅ Tablas de finanzas creadas correctamente');
         }
       }
+
+      // Verificar si las tablas de comunicación (tickets y posts) existen, si no, crearlas
+      try {
+        await prisma.$queryRaw`SELECT 1 FROM "ticket" LIMIT 1`;
+        console.log('✅ Tabla ticket ya existe');
+      } catch (error: any) {
+        if (error.message?.includes('does not exist') || error.code === '42P01') {
+          console.log('📝 Tabla ticket no existe. Creando tablas de comunicación...');
+          await this.createMissingTablesWithPrisma(prisma);
+          console.log('✅ Tablas de comunicación creadas correctamente');
+        }
+      }
       
       console.log('✅ El esquema ya está inicializado en esta base de datos');
       return;
@@ -171,6 +183,7 @@ export class DatabaseManagerService implements OnModuleDestroy {
           { name: 'EstadoUnidad', values: ['OCUPADA', 'VACIA', 'EN_MANTENIMIENTO'] },
           { name: 'TipoDocumento', values: ['CC', 'CE', 'PASAPORTE', 'NIT', 'OTRO'] },
           { name: 'RolResidente', values: ['PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'] },
+          { name: 'EstadoTicket', values: ['ABIERTO', 'EN_PROGRESO', 'RESUELTO', 'CERRADO'] },
         ];
 
         for (const enumDef of enums) {
@@ -350,6 +363,7 @@ export class DatabaseManagerService implements OnModuleDestroy {
       { name: 'EstadoFactura', values: ['PENDIENTE', 'ENVIADA', 'PAGADA', 'VENCIDA', 'CANCELADA'] },
       { name: 'EstadoPago', values: ['PENDIENTE', 'PROCESANDO', 'APROBADO', 'RECHAZADO', 'CANCELADO'] },
       { name: 'MetodoPago', values: ['WOMPI', 'EFECTIVO'] },
+      { name: 'EstadoTicket', values: ['ABIERTO', 'EN_PROGRESO', 'RESUELTO', 'CERRADO'] },
     ];
 
     for (const enumDef of enums) {
@@ -516,6 +530,170 @@ export class DatabaseManagerService implements OnModuleDestroy {
       if (!error.message?.includes('already exists') && error.code !== '42P16') {
         // Ignorar si ya existe
       }
+    }
+
+    // Crear tabla Ticket
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ticket" (
+        "id" STRING NOT NULL,
+        "titulo" STRING NOT NULL,
+        "descripcion" STRING NOT NULL,
+        "estado" "EstadoTicket" NOT NULL DEFAULT 'ABIERTO',
+        "categoria" STRING,
+        "prioridad" STRING DEFAULT 'MEDIA',
+        "userId" STRING NOT NULL,
+        "unidadId" STRING,
+        "asignadoA" STRING,
+        "fechaResolucion" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "ticket_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla TicketComment
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ticket_comment" (
+        "id" STRING NOT NULL,
+        "ticketId" STRING NOT NULL,
+        "userId" STRING NOT NULL,
+        "contenido" STRING NOT NULL,
+        "esInterno" BOOL NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "ticket_comment_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla Post
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post" (
+        "id" STRING NOT NULL,
+        "titulo" STRING,
+        "contenido" STRING NOT NULL,
+        "userId" STRING NOT NULL,
+        "unidadId" STRING,
+        "imagen" STRING,
+        "activo" BOOL NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "post_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla PostComment
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post_comment" (
+        "id" STRING NOT NULL,
+        "postId" STRING NOT NULL,
+        "userId" STRING NOT NULL,
+        "contenido" STRING NOT NULL,
+        "activo" BOOL NOT NULL DEFAULT true,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "post_comment_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla PostLike
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post_like" (
+        "id" STRING NOT NULL,
+        "postId" STRING NOT NULL,
+        "userId" STRING NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "post_like_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear índices para tickets y posts
+    await Promise.all([
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_userId_idx" ON "ticket"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_unidadId_idx" ON "ticket"("unidadId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_estado_idx" ON "ticket"("estado");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_categoria_idx" ON "ticket"("categoria");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_asignadoA_idx" ON "ticket"("asignadoA");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_createdAt_idx" ON "ticket"("createdAt");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_comment_ticketId_idx" ON "ticket_comment"("ticketId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_comment_userId_idx" ON "ticket_comment"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ticket_comment_createdAt_idx" ON "ticket_comment"("createdAt");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_userId_idx" ON "post"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_unidadId_idx" ON "post"("unidadId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_activo_idx" ON "post"("activo");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_createdAt_idx" ON "post"("createdAt");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_comment_postId_idx" ON "post_comment"("postId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_comment_userId_idx" ON "post_comment"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_comment_createdAt_idx" ON "post_comment"("createdAt");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_like_postId_idx" ON "post_like"("postId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_like_userId_idx" ON "post_like"("userId");`),
+    ]);
+
+    // Crear unique constraint para post_like (un usuario solo puede dar like una vez por post)
+    try {
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "post_like_postId_userId_key" ON "post_like"("postId", "userId");`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    // Crear foreign keys para tickets y posts
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ticket" ADD CONSTRAINT IF NOT EXISTS "ticket_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ticket" ADD CONSTRAINT IF NOT EXISTS "ticket_unidadId_fkey" FOREIGN KEY ("unidadId") REFERENCES "unidad"("id") ON DELETE SET NULL ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ticket_comment" ADD CONSTRAINT IF NOT EXISTS "ticket_comment_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "ticket"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "ticket_comment" ADD CONSTRAINT IF NOT EXISTS "ticket_comment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post" ADD CONSTRAINT IF NOT EXISTS "post_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post" ADD CONSTRAINT IF NOT EXISTS "post_unidadId_fkey" FOREIGN KEY ("unidadId") REFERENCES "unidad"("id") ON DELETE SET NULL ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_comment" ADD CONSTRAINT IF NOT EXISTS "post_comment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_comment" ADD CONSTRAINT IF NOT EXISTS "post_comment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_like" ADD CONSTRAINT IF NOT EXISTS "post_like_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_like" ADD CONSTRAINT IF NOT EXISTS "post_like_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
     }
   }
 
