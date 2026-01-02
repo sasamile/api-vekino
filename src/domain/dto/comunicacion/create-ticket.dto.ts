@@ -6,6 +6,13 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export enum PrioridadTicket {
+  BAJA = 'BAJA',
+  MEDIA = 'MEDIA',
+  ALTA = 'ALTA',
+  URGENTE = 'URGENTE',
+}
+
 export class CreateTicketDto {
   @ApiProperty({
     description: 'Título del ticket',
@@ -33,13 +40,13 @@ export class CreateTicketDto {
 
   @ApiPropertyOptional({
     description: 'Prioridad del ticket',
-    enum: ['BAJA', 'MEDIA', 'ALTA', 'URGENTE'],
-    example: 'MEDIA',
-    default: 'MEDIA',
+    enum: PrioridadTicket,
+    example: PrioridadTicket.MEDIA,
+    default: PrioridadTicket.MEDIA,
   })
-  @IsEnum(['BAJA', 'MEDIA', 'ALTA', 'URGENTE'])
+  @IsEnum(PrioridadTicket)
   @IsOptional()
-  prioridad?: string;
+  prioridad?: PrioridadTicket;
 
   @ApiPropertyOptional({
     description: 'ID de la unidad relacionada',
