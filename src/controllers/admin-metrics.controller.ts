@@ -32,6 +32,11 @@ import {
   QueryActividadRecienteDto,
   QueryRecaudoMensualDto,
   QueryReporteDto,
+  MetricasAdicionalesDto,
+  UnidadesActivasReservasResponseDto,
+  ReservasPorEspacioResponseDto,
+  FacturacionPorTipoResponseDto,
+  ComparacionMensualDto,
 } from 'src/domain/dto/admin-metrics/admin-metrics-response.dto';
 import { Request } from 'express';
 
@@ -318,6 +323,127 @@ export class AdminMetricsController {
       mesFin,
       incluirGraficas: incluirGraficas !== 'false',
     });
+  }
+
+  /**
+   * Obtiene métricas adicionales
+   */
+  @Get('metricas-adicionales')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener métricas adicionales',
+    description: 'Retorna métricas adicionales como tasa de ocupación, tiempo promedio de pago, etc.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Métricas adicionales obtenidas exitosamente',
+    type: MetricasAdicionalesDto,
+  })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  async getMetricasAdicionales(
+    @Subdomain() subdomain: string | null,
+  ): Promise<MetricasAdicionalesDto> {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.adminMetricsService.getMetricasAdicionales(condominioId);
+  }
+
+  /**
+   * Obtiene unidades más activas en reservas
+   */
+  @Get('unidades-activas-reservas')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener unidades más activas en reservas',
+    description: 'Retorna las unidades con más reservas en los últimos 3 meses',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Cantidad de unidades a retornar',
+    example: 10,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Unidades activas obtenidas exitosamente',
+    type: UnidadesActivasReservasResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  async getUnidadesActivasReservas(
+    @Subdomain() subdomain: string | null,
+    @Query('limit') limit?: number,
+  ): Promise<UnidadesActivasReservasResponseDto> {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.adminMetricsService.getUnidadesActivasReservas(
+      condominioId,
+      limit ? Number(limit) : 10,
+    );
+  }
+
+  /**
+   * Obtiene reservas por espacio común
+   */
+  @Get('reservas-por-espacio')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener reservas por espacio común',
+    description: 'Retorna la distribución de reservas por cada espacio común',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reservas por espacio obtenidas exitosamente',
+    type: ReservasPorEspacioResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  async getReservasPorEspacio(
+    @Subdomain() subdomain: string | null,
+  ): Promise<ReservasPorEspacioResponseDto> {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.adminMetricsService.getReservasPorEspacio(condominioId);
+  }
+
+  /**
+   * Obtiene facturación por tipo de unidad
+   */
+  @Get('facturacion-por-tipo')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener facturación por tipo de unidad',
+    description: 'Retorna la facturación y recaudo agrupado por tipo de unidad',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Facturación por tipo obtenida exitosamente',
+    type: FacturacionPorTipoResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  async getFacturacionPorTipo(
+    @Subdomain() subdomain: string | null,
+  ): Promise<FacturacionPorTipoResponseDto> {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.adminMetricsService.getFacturacionPorTipo(condominioId);
+  }
+
+  /**
+   * Obtiene comparación mensual
+   */
+  @Get('comparacion-mensual')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener comparación mensual',
+    description: 'Compara el mes actual con el mes anterior',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Comparación mensual obtenida exitosamente',
+    type: ComparacionMensualDto,
+  })
+  @ApiResponse({ status: 403, description: 'No autorizado - se requiere rol ADMIN' })
+  async getComparacionMensual(
+    @Subdomain() subdomain: string | null,
+  ): Promise<ComparacionMensualDto> {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.adminMetricsService.getComparacionMensual(condominioId);
   }
 }
 

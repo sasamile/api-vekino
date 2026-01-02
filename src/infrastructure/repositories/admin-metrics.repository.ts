@@ -153,13 +153,14 @@ export class AdminMetricsRepository {
   }
 
   /**
-   * Obtiene pagos pendientes
+   * Obtiene facturas pendientes de pago (no pagadas)
    */
-  async getPagosPendientes(prisma: PrismaClient): Promise<number> {
+  async getFacturasPendientesPago(prisma: PrismaClient): Promise<number> {
     const result = await prisma.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(*)::int as count
-      FROM "pago"
-      WHERE estado IN ('PENDIENTE', 'PROCESANDO')
+      FROM "factura"
+      WHERE estado IN ('PENDIENTE', 'ENVIADA')
+        AND "fechaVencimiento" >= CURRENT_DATE
     `;
     return Number(result[0]?.count || 0);
   }
@@ -283,8 +284,7 @@ export class AdminMetricsRepository {
         actividades.push({
           id: pago.id,
           tipo: 'PAGO_PROCESADO',
-          titulo: 'Pago procesado',
-          descripcion: `${pago.unidadIdentificador} - $${pago.valor.toLocaleString('es-CO')}`,
+          titulo: `Pago procesado - ${pago.unidadIdentificador} - $${pago.valor.toLocaleString('es-CO')}`,
           fecha: pago.fecha,
           metadata: {
             valor: pago.valor,
@@ -322,8 +322,7 @@ export class AdminMetricsRepository {
         actividades.push({
           id: reserva.id,
           tipo: 'NUEVA_RESERVA',
-          titulo: 'Nueva reserva',
-          descripcion: `${reserva.espacioNombre}${reserva.unidadIdentificador ? ' - ' + reserva.unidadIdentificador : ''}`,
+          titulo: `Nueva reserva - ${reserva.espacioNombre}${reserva.unidadIdentificador ? ' - ' + reserva.unidadIdentificador : ''}`,
           fecha: reserva.fecha,
           metadata: {
             espacio: reserva.espacioNombre,
@@ -566,6 +565,248 @@ export class AdminMetricsRepository {
           ? (Number(r.pagosCompletados) / Number(r.facturasEmitidas)) * 100
           : 0,
     }));
+  }
+
+  /**
+   * Obtiene tasa de ocupación
+   */
+  async getTasaOcupacion(prisma: PrismaClient): Promise<number> {
+    const result = await prisma.$queryRaw<
+      Array<{ ocupadas: bigint; total: bigint }>
+    >`
+      SELECT 
+        COUNT(CASE WHEN estado = 'OCUPADA' THEN 1 END)::int as ocupadas,
+        COUNT(*)::int as total
+      FROM "unidad"
+    `;
+
+    const data = result[0] || { ocupadas: BigInt(0), total: BigInt(0) };
+    const ocupadas = Number(data.ocupadas || 0);
+    const total = Number(data.total || 0);
+
+    return total > 0 ? (ocupadas / total) * 100 : 0;
+  }
+
+  /**
+   * Obtiene tiempo promedio de pago (en días)
+   */
+  async getTiempoPromedioPago(prisma: PrismaClient): Promise<number> {
+    const result = await prisma.$queryRaw<
+      Array<{ promedioDias: number | null }>
+    >`
+      SELECT 
+        AVG(EXTRACT(EPOCH FROM (p."fechaPago" - f."fechaEmision")) / 86400)::float as "promedioDias"
+      FROM "pago" p
+      INNER JOIN "factura" f ON p."facturaId" = f.id
+      WHERE p.estado = 'APROBADO'
+        AND p."fechaPago" IS NOT NULL
+        AND f."fechaEmision" IS NOT NULL
+    `;
+
+    return Number(result[0]?.promedioDias || 0);
+  }
+
+  /**
+   * Obtiene unidades más activas en reservas
+   */
+  async getUnidadesMasActivasReservas(
+    prisma: PrismaClient,
+    limit: number = 10,
+  ) {
+    const result = await prisma.$queryRaw<
+      Array<{
+        unidadId: string;
+        identificador: string;
+        totalReservas: bigint;
+        reservasConfirmadas: bigint;
+      }>
+    >`
+      SELECT 
+        u.id as "unidadId",
+        u.identificador,
+        COUNT(r.id)::int as "totalReservas",
+        COUNT(CASE WHEN r.estado = 'CONFIRMADA' THEN 1 END)::int as "reservasConfirmadas"
+      FROM "unidad" u
+      INNER JOIN "reserva" r ON r."unidadId" = u.id
+      WHERE r."fechaInicio" >= CURRENT_DATE - INTERVAL '3 months'
+      GROUP BY u.id, u.identificador
+      HAVING COUNT(r.id) > 0
+      ORDER BY "totalReservas" DESC
+      LIMIT ${limit}
+    `;
+
+    return result.map((r) => ({
+      unidadId: r.unidadId,
+      identificador: r.identificador,
+      totalReservas: Number(r.totalReservas || 0),
+      reservasConfirmadas: Number(r.reservasConfirmadas || 0),
+    }));
+  }
+
+  /**
+   * Obtiene reservas por espacio común
+   */
+  async getReservasPorEspacioComun(prisma: PrismaClient) {
+    const result = await prisma.$queryRaw<
+      Array<{
+        espacioId: string;
+        espacioNombre: string;
+        totalReservas: bigint;
+        reservasConfirmadas: bigint;
+        reservasCanceladas: bigint;
+      }>
+    >`
+      SELECT 
+        ec.id as "espacioId",
+        ec.nombre as "espacioNombre",
+        COUNT(r.id)::int as "totalReservas",
+        COUNT(CASE WHEN r.estado = 'CONFIRMADA' THEN 1 END)::int as "reservasConfirmadas",
+        COUNT(CASE WHEN r.estado = 'CANCELADA' THEN 1 END)::int as "reservasCanceladas"
+      FROM "espacio_comun" ec
+      LEFT JOIN "reserva" r ON r."espacioComunId" = ec.id
+        AND r."fechaInicio" >= CURRENT_DATE - INTERVAL '3 months'
+      WHERE ec.activo = true
+      GROUP BY ec.id, ec.nombre
+      ORDER BY "totalReservas" DESC
+    `;
+
+    return result.map((r) => ({
+      espacioId: r.espacioId,
+      espacioNombre: r.espacioNombre,
+      totalReservas: Number(r.totalReservas || 0),
+      reservasConfirmadas: Number(r.reservasConfirmadas || 0),
+      reservasCanceladas: Number(r.reservasCanceladas || 0),
+    }));
+  }
+
+  /**
+   * Obtiene facturación por tipo de unidad
+   */
+  async getFacturacionPorTipoUnidad(prisma: PrismaClient) {
+    const result = await prisma.$queryRaw<
+      Array<{
+        tipo: string;
+        totalFacturado: number;
+        totalRecaudado: number;
+        unidades: bigint;
+      }>
+    >`
+      SELECT 
+        u.tipo,
+        COALESCE(SUM(f.valor), 0)::float as "totalFacturado",
+        COALESCE(SUM(CASE 
+          WHEN f.estado = 'PAGADA' AND p.estado = 'APROBADO' 
+          THEN p.valor 
+          ELSE 0 
+        END), 0)::float as "totalRecaudado",
+        COUNT(DISTINCT u.id)::int as unidades
+      FROM "unidad" u
+      LEFT JOIN "factura" f ON f."unidadId" = u.id
+        AND f.periodo >= TO_CHAR(CURRENT_DATE - INTERVAL '3 months', 'YYYY-MM')
+      LEFT JOIN "pago" p ON p."facturaId" = f.id
+      GROUP BY u.tipo
+      ORDER BY "totalFacturado" DESC
+    `;
+
+    return result.map((r) => ({
+      tipo: r.tipo,
+      totalFacturado: Number(r.totalFacturado || 0),
+      totalRecaudado: Number(r.totalRecaudado || 0),
+      unidades: Number(r.unidades || 0),
+      porcentajeRecaudo:
+        Number(r.totalFacturado) > 0
+          ? (Number(r.totalRecaudado) / Number(r.totalFacturado)) * 100
+          : 0,
+    }));
+  }
+
+  /**
+   * Obtiene comparación mes a mes
+   */
+  async getComparacionMensual(prisma: PrismaClient) {
+    const mesActual = new Date().toISOString().slice(0, 7);
+    const mesAnterior = new Date(
+      new Date().setMonth(new Date().getMonth() - 1),
+    )
+      .toISOString()
+      .slice(0, 7);
+
+    const [actual, anterior] = await Promise.all([
+      this.getRecaudoMensual(prisma, mesActual),
+      this.getRecaudoMensual(prisma, mesAnterior),
+    ]);
+
+    return {
+      mesActual: {
+        mes: mesActual,
+        ...actual,
+      },
+      mesAnterior: {
+        mes: mesAnterior,
+        ...anterior,
+      },
+      variacionFacturado:
+        anterior.totalFacturado > 0
+          ? ((actual.totalFacturado - anterior.totalFacturado) /
+              anterior.totalFacturado) *
+            100
+          : 0,
+      variacionRecaudado:
+        anterior.totalRecaudado > 0
+          ? ((actual.totalRecaudado - anterior.totalRecaudado) /
+              anterior.totalRecaudado) *
+            100
+          : 0,
+      variacionPorcentajeRecaudo:
+        actual.totalFacturado > 0 && anterior.totalFacturado > 0
+          ? (actual.totalRecaudado / actual.totalFacturado) * 100 -
+            (anterior.totalRecaudado / anterior.totalFacturado) * 100
+          : 0,
+    };
+  }
+
+  /**
+   * Obtiene facturas próximas a vencer (próximos 7 días)
+   */
+  async getFacturasProximasVencer(prisma: PrismaClient): Promise<number> {
+    const result = await prisma.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(*)::int as count
+      FROM "factura"
+      WHERE estado IN ('PENDIENTE', 'ENVIADA')
+        AND "fechaVencimiento" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+    `;
+    return Number(result[0]?.count || 0);
+  }
+
+  /**
+   * Obtiene valor total de facturas pendientes
+   */
+  async getValorFacturasPendientes(prisma: PrismaClient): Promise<number> {
+    const result = await prisma.$queryRaw<
+      Array<{ valorTotal: number }>
+    >`
+      SELECT COALESCE(SUM(valor), 0)::float as "valorTotal"
+      FROM "factura"
+      WHERE estado IN ('PENDIENTE', 'ENVIADA')
+        AND "fechaVencimiento" >= CURRENT_DATE
+    `;
+    return Number(result[0]?.valorTotal || 0);
+  }
+
+  /**
+   * Obtiene valor total de facturas vencidas
+   */
+  async getValorFacturasVencidas(prisma: PrismaClient): Promise<number> {
+    const result = await prisma.$queryRaw<
+      Array<{ valorTotal: number }>
+    >`
+      SELECT COALESCE(SUM(valor), 0)::float as "valorTotal"
+      FROM "factura"
+      WHERE estado = 'VENCIDA'
+        OR (estado IN ('PENDIENTE', 'ENVIADA') 
+            AND "fechaVencimiento" < CURRENT_DATE)
+    `;
+    return Number(result[0]?.valorTotal || 0);
   }
 }
 

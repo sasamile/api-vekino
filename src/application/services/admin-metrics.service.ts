@@ -13,6 +13,11 @@ import {
   QueryActividadRecienteDto,
   QueryRecaudoMensualDto,
   QueryReporteDto,
+  MetricasAdicionalesDto,
+  UnidadesActivasReservasResponseDto,
+  ReservasPorEspacioResponseDto,
+  FacturacionPorTipoResponseDto,
+  ComparacionMensualDto,
 } from '../../domain/dto/admin-metrics/admin-metrics-response.dto';
 
 @Injectable()
@@ -36,7 +41,7 @@ export class AdminMetricsService {
       unidadesPorEstado,
       reservasActivas,
       recaudoMensual,
-      pagosPendientes,
+      facturasPendientesPago,
       facturasVencidas,
       unidadesMorosas,
     ] = await Promise.all([
@@ -44,7 +49,7 @@ export class AdminMetricsService {
       this.adminMetricsRepository.getUnidadesPorEstado(condominioPrisma),
       this.adminMetricsRepository.getReservasActivas(condominioPrisma),
       this.adminMetricsRepository.getRecaudoMensual(condominioPrisma),
-      this.adminMetricsRepository.getPagosPendientes(condominioPrisma),
+      this.adminMetricsRepository.getFacturasPendientesPago(condominioPrisma),
       this.adminMetricsRepository.getFacturasVencidas(condominioPrisma),
       this.adminMetricsRepository.getUnidadesMorosas(condominioPrisma),
     ]);
@@ -67,7 +72,7 @@ export class AdminMetricsService {
       recaudoMensual: Math.round(porcentajeRecaudo * 100) / 100, // Redondear a 2 decimales
       totalFacturadoMes: recaudoMensual.totalFacturado,
       totalRecaudadoMes: recaudoMensual.totalRecaudado,
-      pagosPendientes,
+      pagosPendientes: facturasPendientesPago, // Facturas pendientes de pago
       facturasVencidas,
       unidadesMorosas,
     };
@@ -103,8 +108,7 @@ export class AdminMetricsService {
       actividades: actividades.map((act) => ({
         id: act.id,
         tipo: act.tipo,
-        titulo: act.titulo,
-        descripcion: act.descripcion,
+        titulo: act.titulo, // Ya incluye toda la información en el título
         fecha: act.fecha instanceof Date ? act.fecha.toISOString() : act.fecha,
         metadata: act.metadata,
       })),
@@ -274,6 +278,108 @@ export class AdminMetricsService {
       fechaGeneracion: new Date().toISOString(),
       periodo,
     };
+  }
+
+  /**
+   * Obtiene métricas adicionales
+   */
+  async getMetricasAdicionales(
+    condominioId: string,
+  ): Promise<MetricasAdicionalesDto> {
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    const [
+      tasaOcupacion,
+      tiempoPromedioPago,
+      facturasProximasVencer,
+      valorFacturasPendientes,
+      valorFacturasVencidas,
+    ] = await Promise.all([
+      this.adminMetricsRepository.getTasaOcupacion(condominioPrisma),
+      this.adminMetricsRepository.getTiempoPromedioPago(condominioPrisma),
+      this.adminMetricsRepository.getFacturasProximasVencer(condominioPrisma),
+      this.adminMetricsRepository.getValorFacturasPendientes(condominioPrisma),
+      this.adminMetricsRepository.getValorFacturasVencidas(condominioPrisma),
+    ]);
+
+    return {
+      tasaOcupacion: Math.round(tasaOcupacion * 100) / 100,
+      tiempoPromedioPago: Math.round(tiempoPromedioPago * 100) / 100,
+      facturasProximasVencer,
+      valorFacturasPendientes,
+      valorFacturasVencidas,
+    };
+  }
+
+  /**
+   * Obtiene unidades más activas en reservas
+   */
+  async getUnidadesActivasReservas(
+    condominioId: string,
+    limit: number = 10,
+  ): Promise<UnidadesActivasReservasResponseDto> {
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    const unidades =
+      await this.adminMetricsRepository.getUnidadesMasActivasReservas(
+        condominioPrisma,
+        limit,
+      );
+
+    return { unidades };
+  }
+
+  /**
+   * Obtiene reservas por espacio común
+   */
+  async getReservasPorEspacio(
+    condominioId: string,
+  ): Promise<ReservasPorEspacioResponseDto> {
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    const espacios =
+      await this.adminMetricsRepository.getReservasPorEspacioComun(
+        condominioPrisma,
+      );
+
+    return { espacios };
+  }
+
+  /**
+   * Obtiene facturación por tipo de unidad
+   */
+  async getFacturacionPorTipo(
+    condominioId: string,
+  ): Promise<FacturacionPorTipoResponseDto> {
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    const tipos =
+      await this.adminMetricsRepository.getFacturacionPorTipoUnidad(
+        condominioPrisma,
+      );
+
+    return {
+      tipos: tipos.map((t) => ({
+        ...t,
+        porcentajeRecaudo: Math.round(t.porcentajeRecaudo * 100) / 100,
+      })),
+    };
+  }
+
+  /**
+   * Obtiene comparación mensual
+   */
+  async getComparacionMensual(
+    condominioId: string,
+  ): Promise<ComparacionMensualDto> {
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    return this.adminMetricsRepository.getComparacionMensual(condominioPrisma);
   }
 }
 

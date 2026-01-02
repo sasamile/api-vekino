@@ -23,7 +23,7 @@ export class DashboardOverviewDto {
   @ApiProperty({ description: 'Total recaudado en el mes actual' })
   totalRecaudadoMes: number;
 
-  @ApiProperty({ description: 'Cantidad de pagos pendientes' })
+  @ApiProperty({ description: 'Cantidad de facturas pendientes de pago (no pagadas)' })
   pagosPendientes: number;
 
   @ApiProperty({ description: 'Cantidad de facturas vencidas' })
@@ -64,11 +64,8 @@ export class ActividadRecienteDto {
   @ApiProperty({ description: 'Tipo de actividad', enum: TipoActividad })
   tipo: TipoActividad;
 
-  @ApiProperty({ description: 'Título de la actividad' })
+  @ApiProperty({ description: 'Título completo de la actividad (incluye toda la información)' })
   titulo: string;
-
-  @ApiProperty({ description: 'Descripción de la actividad' })
-  descripcion: string;
 
   @ApiProperty({ description: 'Fecha de la actividad' })
   fecha: string;
@@ -256,5 +253,115 @@ export class QueryReporteDto {
 
   @ApiProperty({ description: 'Incluir gráficas detalladas', required: false, default: true })
   incluirGraficas?: boolean = true;
+}
+
+// ========== Métricas Adicionales ==========
+export class MetricasAdicionalesDto {
+  @ApiProperty({ description: 'Tasa de ocupación (%)' })
+  tasaOcupacion: number;
+
+  @ApiProperty({ description: 'Tiempo promedio de pago (en días)' })
+  tiempoPromedioPago: number;
+
+  @ApiProperty({ description: 'Facturas próximas a vencer (próximos 7 días)' })
+  facturasProximasVencer: number;
+
+  @ApiProperty({ description: 'Valor total de facturas pendientes (COP)' })
+  valorFacturasPendientes: number;
+
+  @ApiProperty({ description: 'Valor total de facturas vencidas (COP)' })
+  valorFacturasVencidas: number;
+}
+
+export class UnidadActivaReservaDto {
+  @ApiProperty({ description: 'ID de la unidad' })
+  unidadId: string;
+
+  @ApiProperty({ description: 'Identificador de la unidad' })
+  identificador: string;
+
+  @ApiProperty({ description: 'Total de reservas' })
+  totalReservas: number;
+
+  @ApiProperty({ description: 'Reservas confirmadas' })
+  reservasConfirmadas: number;
+}
+
+export class UnidadesActivasReservasResponseDto {
+  @ApiProperty({ description: 'Unidades más activas en reservas', type: [UnidadActivaReservaDto] })
+  unidades: UnidadActivaReservaDto[];
+}
+
+export class ReservaPorEspacioDto {
+  @ApiProperty({ description: 'ID del espacio común' })
+  espacioId: string;
+
+  @ApiProperty({ description: 'Nombre del espacio común' })
+  espacioNombre: string;
+
+  @ApiProperty({ description: 'Total de reservas' })
+  totalReservas: number;
+
+  @ApiProperty({ description: 'Reservas confirmadas' })
+  reservasConfirmadas: number;
+
+  @ApiProperty({ description: 'Reservas canceladas' })
+  reservasCanceladas: number;
+}
+
+export class ReservasPorEspacioResponseDto {
+  @ApiProperty({ description: 'Reservas por espacio común', type: [ReservaPorEspacioDto] })
+  espacios: ReservaPorEspacioDto[];
+}
+
+export class FacturacionPorTipoDto {
+  @ApiProperty({ description: 'Tipo de unidad' })
+  tipo: string;
+
+  @ApiProperty({ description: 'Total facturado' })
+  totalFacturado: number;
+
+  @ApiProperty({ description: 'Total recaudado' })
+  totalRecaudado: number;
+
+  @ApiProperty({ description: 'Cantidad de unidades' })
+  unidades: number;
+
+  @ApiProperty({ description: 'Porcentaje de recaudo (%)' })
+  porcentajeRecaudo: number;
+}
+
+export class FacturacionPorTipoResponseDto {
+  @ApiProperty({ description: 'Facturación por tipo de unidad', type: [FacturacionPorTipoDto] })
+  tipos: FacturacionPorTipoDto[];
+}
+
+export class ComparacionMensualDto {
+  @ApiProperty({ description: 'Datos del mes actual' })
+  mesActual: {
+    mes: string;
+    totalFacturado: number;
+    totalRecaudado: number;
+    facturasEmitidas: number;
+    facturasPagadas: number;
+  };
+
+  @ApiProperty({ description: 'Datos del mes anterior' })
+  mesAnterior: {
+    mes: string;
+    totalFacturado: number;
+    totalRecaudado: number;
+    facturasEmitidas: number;
+    facturasPagadas: number;
+  };
+
+  @ApiProperty({ description: 'Variación en facturación (%)' })
+  variacionFacturado: number;
+
+  @ApiProperty({ description: 'Variación en recaudo (%)' })
+  variacionRecaudado: number;
+
+  @ApiProperty({ description: 'Variación en porcentaje de recaudo (%)' })
+  variacionPorcentajeRecaudo: number;
 }
 

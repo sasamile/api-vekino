@@ -42,7 +42,7 @@ Obtiene el resumen principal del dashboard con todas las métricas clave.
 - `recaudoMensual`: Porcentaje de recaudo del mes actual (0-100)
 - `totalFacturadoMes`: Total facturado en el mes actual (COP)
 - `totalRecaudadoMes`: Total recaudado en el mes actual (COP)
-- `pagosPendientes`: Cantidad de pagos en estado PENDIENTE o PROCESANDO
+- `pagosPendientes`: Cantidad de facturas pendientes de pago (no pagadas, sin vencer)
 - `facturasVencidas`: Cantidad de facturas vencidas
 - `unidadesMorosas`: Cantidad de unidades con facturas vencidas
 
@@ -99,8 +99,7 @@ GET /admin-metrics/actividad-reciente?limit=20&tipos=PAGO_PROCESADO&tipos=NUEVA_
     {
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "tipo": "PAGO_PROCESADO",
-      "titulo": "Pago procesado",
-      "descripcion": "Casa 127 - $450.000",
+      "titulo": "Pago procesado - Casa 127 - $450.000",
       "fecha": "2026-01-15T10:30:00.000Z",
       "metadata": {
         "valor": 450000,
@@ -111,8 +110,7 @@ GET /admin-metrics/actividad-reciente?limit=20&tipos=PAGO_PROCESADO&tipos=NUEVA_
     {
       "id": "660e8400-e29b-41d4-a716-446655440001",
       "tipo": "NUEVA_RESERVA",
-      "titulo": "Nueva reserva",
-      "descripcion": "Salón Social - Casa 89",
+      "titulo": "Nueva reserva - Salón Social - Casa 89",
       "fecha": "2026-01-15T09:15:00.000Z",
       "metadata": {
         "espacio": "Salón Social",
@@ -123,6 +121,8 @@ GET /admin-metrics/actividad-reciente?limit=20&tipos=PAGO_PROCESADO&tipos=NUEVA_
   "total": 2
 }
 ```
+
+**Nota:** El formato de actividad reciente ahora incluye toda la información en el campo `titulo` para facilitar su visualización directa.
 
 ---
 
@@ -445,13 +445,184 @@ const obtenerActividadReciente = async (limit: number = 10) => {
   return data.actividades.map((actividad: any) => ({
     id: actividad.id,
     tipo: actividad.tipo,
-    titulo: actividad.titulo,
-    descripcion: actividad.descripcion,
+    titulo: actividad.titulo, // Ya incluye toda la información
     fecha: new Date(actividad.fecha),
     icono: obtenerIconoPorTipo(actividad.tipo),
   }));
 };
 ```
+
+---
+
+### 9. Métricas Adicionales
+
+Obtiene métricas adicionales útiles para el análisis.
+
+**Endpoint:** `GET /admin-metrics/metricas-adicionales`
+
+**Response (200 OK):**
+```json
+{
+  "tasaOcupacion": 75.0,
+  "tiempoPromedioPago": 5.2,
+  "facturasProximasVencer": 15,
+  "valorFacturasPendientes": 4500000,
+  "valorFacturasVencidas": 750000
+}
+```
+
+**Campos:**
+- `tasaOcupacion`: Porcentaje de unidades ocupadas (0-100)
+- `tiempoPromedioPago`: Tiempo promedio en días desde emisión hasta pago
+- `facturasProximasVencer`: Cantidad de facturas que vencen en los próximos 7 días
+- `valorFacturasPendientes`: Valor total de facturas pendientes de pago (COP)
+- `valorFacturasVencidas`: Valor total de facturas vencidas (COP)
+
+---
+
+### 10. Unidades Más Activas en Reservas
+
+Obtiene las unidades con más reservas en los últimos 3 meses.
+
+**Endpoint:** `GET /admin-metrics/unidades-activas-reservas`
+
+**Query Parameters:**
+- `limit` (opcional): Cantidad de unidades a retornar (default: 10)
+
+**Response (200 OK):**
+```json
+{
+  "unidades": [
+    {
+      "unidadId": "550e8400-e29b-41d4-a716-446655440000",
+      "identificador": "Casa 127",
+      "totalReservas": 12,
+      "reservasConfirmadas": 10
+    },
+    {
+      "unidadId": "660e8400-e29b-41d4-a716-446655440001",
+      "identificador": "Apto 501",
+      "totalReservas": 8,
+      "reservasConfirmadas": 7
+    }
+  ]
+}
+```
+
+---
+
+### 11. Reservas por Espacio Común
+
+Obtiene la distribución de reservas por cada espacio común.
+
+**Endpoint:** `GET /admin-metrics/reservas-por-espacio`
+
+**Response (200 OK):**
+```json
+{
+  "espacios": [
+    {
+      "espacioId": "550e8400-e29b-41d4-a716-446655440000",
+      "espacioNombre": "Salón Social",
+      "totalReservas": 45,
+      "reservasConfirmadas": 35,
+      "reservasCanceladas": 5
+    },
+    {
+      "espacioId": "660e8400-e29b-41d4-a716-446655440001",
+      "espacioNombre": "Zona BBQ",
+      "totalReservas": 30,
+      "reservasConfirmadas": 25,
+      "reservasCanceladas": 3
+    }
+  ]
+}
+```
+
+**Uso para gráficas:**
+- **Gráfica de barras:** Mostrar `totalReservas` por espacio
+- **Gráfica apilada:** Mostrar `reservasConfirmadas` vs `reservasCanceladas`
+
+---
+
+### 12. Facturación por Tipo de Unidad
+
+Obtiene la facturación y recaudo agrupado por tipo de unidad.
+
+**Endpoint:** `GET /admin-metrics/facturacion-por-tipo`
+
+**Response (200 OK):**
+```json
+{
+  "tipos": [
+    {
+      "tipo": "CASA",
+      "totalFacturado": 15000000,
+      "totalRecaudado": 13500000,
+      "unidades": 50,
+      "porcentajeRecaudo": 90.0
+    },
+    {
+      "tipo": "APARTAMENTO",
+      "totalFacturado": 12000000,
+      "totalRecaudado": 10800000,
+      "unidades": 120,
+      "porcentajeRecaudo": 90.0
+    },
+    {
+      "tipo": "LOCAL_COMERCIAL",
+      "totalFacturado": 3000000,
+      "totalRecaudado": 3000000,
+      "unidades": 10,
+      "porcentajeRecaudo": 100.0
+    }
+  ]
+}
+```
+
+**Uso para gráficas:**
+- **Gráfica de dona/pie:** Mostrar distribución de facturación por tipo
+- **Tabla comparativa:** Mostrar facturación vs recaudo por tipo
+
+---
+
+### 13. Comparación Mensual
+
+Compara el mes actual con el mes anterior.
+
+**Endpoint:** `GET /admin-metrics/comparacion-mensual`
+
+**Response (200 OK):**
+```json
+{
+  "mesActual": {
+    "mes": "2026-01",
+    "totalFacturado": 30000000,
+    "totalRecaudado": 26250000,
+    "facturasEmitidas": 200,
+    "facturasPagadas": 175
+  },
+  "mesAnterior": {
+    "mes": "2025-12",
+    "totalFacturado": 30000000,
+    "totalRecaudado": 28500000,
+    "facturasEmitidas": 200,
+    "facturasPagadas": 190
+  },
+  "variacionFacturado": 0.0,
+  "variacionRecaudado": -7.89,
+  "variacionPorcentajeRecaudo": -2.5
+}
+```
+
+**Campos:**
+- `variacionFacturado`: Variación porcentual en facturación
+- `variacionRecaudado`: Variación porcentual en recaudo
+- `variacionPorcentajeRecaudo`: Variación en el porcentaje de recaudo
+
+**Uso:**
+- **Indicadores de tendencia:** Mostrar flechas arriba/abajo según variación
+- **Gráfica comparativa:** Mostrar mes actual vs mes anterior lado a lado
 
 ---
 
