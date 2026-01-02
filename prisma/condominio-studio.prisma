@@ -1,0 +1,208 @@
+datasource db {
+  provider = "cockroachdb"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+enum UserRole {
+  ADMIN
+  PROPIETARIO
+  ARRENDATARIO
+  RESIDENTE
+}
+
+model User {
+  id               String    @id
+  name             String
+  email            String
+  emailVerified    Boolean   @default(false)
+  image            String?
+  firstName        String?
+  lastName         String?
+  tipoDocumento    TipoDocumento?
+  numeroDocumento  String?
+  telefono         String?
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  role             UserRole  @default(ADMIN)
+  unidadId         String?
+  unidad           Unidad?   @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  sessions         Session[]
+  accounts         Account[]
+  reservas         Reserva[]
+
+  @@unique([email])
+  @@unique([numeroDocumento])
+  @@index([unidadId])
+  @@index([active])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum TipoUnidad {
+  APARTAMENTO
+  CASA
+  LOCAL_COMERCIAL
+}
+
+enum EstadoUnidad {
+  OCUPADA
+  VACIA
+  EN_MANTENIMIENTO
+}
+
+enum TipoDocumento {
+  CC
+  CE
+  PASAPORTE
+  NIT
+  OTRO
+}
+
+enum TipoEspacio {
+  SALON_SOCIAL
+  ZONA_BBQ
+  SAUNA
+  CASA_EVENTOS
+  GIMNASIO
+  PISCINA
+  CANCHA_DEPORTIVA
+  PARQUEADERO
+  OTRO
+}
+
+enum UnidadTiempoReserva {
+  HORAS
+  DIAS
+  MESES
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+  COMPLETADA
+}
+
+model Unidad {
+  id                        String        @id @default(uuid())
+  identificador             String        // Ej: "Casa 127", "Apto 801"
+  tipo                      TipoUnidad
+  area                      Float?        // Área en m²
+  coeficienteCopropiedad    Float?        // Coeficiente de copropiedad (%)
+  valorCuotaAdministracion  Float?        // Valor de la cuota de administración
+  estado                    EstadoUnidad @default(VACIA)
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+  users                     User[]
+  reservas                  Reserva[]
+
+  @@unique([identificador])
+  @@map("unidad")
+}
+
+// Espacios comunes disponibles para reserva (ej: Salón Social, Zona BBQ, Sauna)
+model EspacioComun {
+  id                String               @id @default(uuid())
+  nombre            String               // Ej: "Salón Social", "Zona BBQ"
+  tipo              TipoEspacio
+  capacidad         Int                  // Capacidad máxima de personas
+  descripcion       String?
+  unidadTiempo      UnidadTiempoReserva  // HORAS, DIAS o MESES
+  precioPorUnidad   Float?               // Precio por unidad de tiempo (opcional)
+  activo            Boolean              @default(true)
+  imagen            String?              // URL de imagen del espacio
+  // Horarios de disponibilidad (JSON: array de días de la semana y horas)
+  // Ejemplo: [{"dia": 1, "horaInicio": "09:00", "horaFin": "22:00"}, {"dia": 2, "horaInicio": "09:00", "horaFin": "22:00"}]
+  // día: 0=Domingo, 1=Lunes, ..., 6=Sábado
+  horariosDisponibilidad String?         // JSON string con horarios
+  requiereAprobacion    Boolean          @default(true) // Si requiere aprobación de ADMIN
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  reservas          Reserva[]
+
+  @@index([tipo])
+  @@index([activo])
+  @@map("espacio_comun")
+}
+
+// Reservas de espacios comunes
+model Reserva {
+  id                String        @id @default(uuid())
+  espacioComunId    String
+  espacioComun      EspacioComun @relation(fields: [espacioComunId], references: [id], onDelete: Restrict)
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unidadId          String?       // Unidad relacionada (opcional, para casas con espacios para eventos)
+  unidad            Unidad?       @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  fechaInicio       DateTime
+  fechaFin          DateTime
+  cantidadPersonas  Int?
+  estado            EstadoReserva @default(PENDIENTE)
+  motivo            String?       // Motivo de la reserva
+  observaciones     String?
+  precioTotal       Float?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  createdBy         String?       // ID del usuario que creó la reserva (puede ser admin)
+
+  @@index([espacioComunId])
+  @@index([userId])
+  @@index([unidadId])
+  @@index([fechaInicio])
+  @@index([fechaFin])
+  @@index([estado])
+  @@map("reserva")
+}
+

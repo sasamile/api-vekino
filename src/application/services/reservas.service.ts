@@ -65,6 +65,9 @@ export class ReservasService {
       }
     }
 
+    // Procesar fechas: JavaScript interpreta fechas sin timezone como hora local del servidor
+    // Para evitar problemas, el frontend DEBE enviar fechas con timezone explícito (ej: -05:00 para Colombia)
+    // Si no viene con timezone, JavaScript lo interpretará como hora local y se convertirá a UTC al guardar
     const fechaInicio = new Date(dto.fechaInicio);
     const fechaFin = new Date(dto.fechaFin);
 

@@ -189,16 +189,19 @@ curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas' 
 
 **⚠️ IMPORTANTE - Formato de Fechas y Zona Horaria:**
 
-El sistema guarda las fechas en UTC. Para evitar problemas de conversión:
+El sistema guarda las fechas en UTC. **SIEMPRE debes enviar las fechas con timezone offset explícito** para evitar problemas de conversión:
 
-- **Formato recomendado:** Enviar fechas con timezone offset explícito:
-  - Colombia (UTC-5): `"2026-01-02T11:00:00-05:00"` para las 11:00 AM hora local
-  - México (UTC-6): `"2026-01-02T11:00:00-06:00"` para las 11:00 AM hora local
-  - Perú (UTC-5): `"2026-01-02T11:00:00-05:00"` para las 11:00 AM hora local
+- **✅ Formato CORRECTO (con timezone):**
+  - Colombia (UTC-5): `"2026-01-02T09:00:00-05:00"` para las 09:00 AM hora Colombia
+  - México (UTC-6): `"2026-01-02T09:00:00-06:00"` para las 09:00 AM hora México
+  - Perú (UTC-5): `"2026-01-02T09:00:00-05:00"` para las 09:00 AM hora Perú
 
-- **Formato UTC (también funciona):** `"2026-01-02T16:00:00Z"` (equivalente a 11:00 AM hora Colombia UTC-5)
+- **✅ Formato UTC (también funciona):** `"2026-01-02T14:00:00Z"` (equivalente a 09:00 AM hora Colombia UTC-5)
 
-- **NO usar formato sin timezone:** `"2026-01-02T11:00:00"` puede causar problemas porque JavaScript lo interpreta como hora local y luego se convierte a UTC automáticamente.
+- **❌ NO usar formato sin timezone:** `"2026-01-02T09:00:00"` (sin timezone)
+  - JavaScript lo interpretará como hora LOCAL del servidor
+  - Si el servidor está en Colombia (UTC-5), "09:00" se guardará como "14:00 UTC" (09:00 + 5 horas)
+  - Esto causará que se muestre incorrectamente en el frontend
 
 **Ejemplo correcto para Colombia:**
 ```json
