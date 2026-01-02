@@ -110,16 +110,24 @@ export class ReservasController {
     description: 'Filtrar por espacios activos',
     example: true,
   })
+  @ApiQuery({
+    name: 'tipo',
+    required: false,
+    enum: ['SALON_SOCIAL', 'ZONA_BBQ', 'SAUNA', 'CASA_EVENTOS', 'GIMNASIO', 'PISCINA', 'CANCHA_DEPORTIVA', 'PARQUEADERO', 'OTRO'],
+    description: 'Filtrar por tipo de espacio',
+    example: 'SALON_SOCIAL',
+  })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
   @ApiResponse({ status: 200, description: 'Lista de espacios comunes' })
   async getEspacios(
     @Subdomain() subdomain: string | null,
     @Query('activo') activo?: string | boolean,
+    @Query('tipo') tipo?: string,
   ) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     const activoBool = activo === undefined ? undefined : activo === true || activo === 'true';
-    return this.espaciosComunesService.getEspaciosComunes(condominioId, activoBool);
+    return this.espaciosComunesService.getEspaciosComunes(condominioId, activoBool, tipo);
   }
 
   /**

@@ -32,29 +32,26 @@ export class EspaciosComunesRepository {
   /**
    * Busca todos los espacios comunes
    */
-  async findAll(prisma: PrismaClient, activo?: boolean) {
+  async findAll(prisma: PrismaClient, activo?: boolean, tipo?: string) {
+    const condiciones: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
     if (activo !== undefined) {
-      return prisma.$queryRaw<any[]>`
-        SELECT 
-          id,
-          nombre,
-          tipo,
-          capacidad,
-          descripcion,
-          "unidadTiempo",
-          "precioPorUnidad",
-          activo,
-          imagen,
-          "horariosDisponibilidad",
-          "requiereAprobacion",
-          "createdAt"::text as "createdAt",
-          "updatedAt"::text as "updatedAt"
-        FROM "espacio_comun"
-        WHERE activo = ${activo}
-        ORDER BY nombre ASC
-      `;
+      condiciones.push(`activo = $${paramIndex}`);
+      params.push(activo);
+      paramIndex++;
     }
-    return prisma.$queryRaw<any[]>`
+
+    if (tipo) {
+      condiciones.push(`tipo = $${paramIndex}::"TipoEspacio"`);
+      params.push(tipo);
+      paramIndex++;
+    }
+
+    const whereClause = condiciones.length > 0 ? `WHERE ${condiciones.join(' AND ')}` : '';
+
+    const query = `
       SELECT 
         id,
         nombre,
@@ -70,8 +67,15 @@ export class EspaciosComunesRepository {
         "createdAt"::text as "createdAt",
         "updatedAt"::text as "updatedAt"
       FROM "espacio_comun"
+      ${whereClause}
       ORDER BY nombre ASC
     `;
+
+    if (params.length > 0) {
+      return prisma.$queryRawUnsafe<any[]>(query, ...params);
+    }
+
+    return prisma.$queryRawUnsafe<any[]>(query);
   }
 
   /**

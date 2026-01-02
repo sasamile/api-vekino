@@ -41,12 +41,12 @@ export class EspaciosComunesService {
   /**
    * Obtiene todos los espacios comunes
    */
-  async getEspaciosComunes(condominioId: string, activo?: boolean) {
+  async getEspaciosComunes(condominioId: string, activo?: boolean, tipo?: string) {
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
-    return this.espaciosComunesRepository.findAll(condominioPrisma, activo);
+    return this.espaciosComunesRepository.findAll(condominioPrisma, activo, tipo);
   }
 
   /**
