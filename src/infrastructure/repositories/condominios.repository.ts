@@ -178,5 +178,35 @@ export class CondominiosRepository {
       .map((c) => c.subdomain)
       .filter((subdomain): subdomain is string => subdomain !== null);
   }
+
+  /**
+   * Encuentra condominios activos cuyo plan ha vencido
+   */
+  async findExpiredCondominios() {
+    const now = new Date();
+    return this.masterPrisma.condominio.findMany({
+      where: {
+        isActive: true,
+        planExpiresAt: {
+          not: null,
+          lt: now, // Menor que la fecha actual = vencido
+        },
+      },
+    });
+  }
+
+  /**
+   * Desactiva múltiples condominios por sus IDs
+   */
+  async deactivateMultiple(ids: string[]) {
+    return this.masterPrisma.condominio.updateMany({
+      where: {
+        id: { in: ids },
+      },
+      data: {
+        isActive: false,
+      },
+    });
+  }
 }
 

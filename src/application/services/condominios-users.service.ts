@@ -439,6 +439,18 @@ export class CondominiosUsersService {
       throw new BadRequestException('El condominio está desactivado');
     }
 
+    // Verificar si el plan del condominio ha vencido
+    if (condominio.planExpiresAt) {
+      const now = new Date();
+      if (new Date(condominio.planExpiresAt) < now) {
+        // Si el plan está vencido, desactivar el condominio automáticamente
+        await this.condominiosService.deactivateCondominio(condominio.id);
+        throw new BadRequestException(
+          'El plan del condominio ha vencido. Por favor, contacte al administrador.',
+        );
+      }
+    }
+
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominio.id);
 

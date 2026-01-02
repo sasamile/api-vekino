@@ -844,7 +844,7 @@ export class CondominiosController {
   @ApiOperation({
     summary: 'Eliminar un condominio',
     description:
-      'Elimina permanentemente un condominio. Requiere rol SUPERADMIN.',
+      'Elimina permanentemente un condominio. Solo permite la eliminación si el condominio no tiene usuarios, unidades o facturación activa. Requiere rol SUPERADMIN.',
   })
   @ApiParam({
     name: 'id',
@@ -859,6 +859,17 @@ export class CondominiosController {
     schema: {
       example: {
         message: 'Condominio eliminado exitosamente',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No se puede eliminar el condominio porque tiene usuarios, unidades o facturación activa',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'No se puede eliminar el condominio porque tiene 5 usuario(s) asociado(s). Por favor, elimine primero los usuarios.',
+        error: 'Bad Request',
       },
     },
   })

@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { PrismaClient } from 'generated/prisma/client';
 import { DatabaseManagerService } from '../../config/database-manager.service';
@@ -22,6 +23,7 @@ export class CondominiosService {
     private readonly databaseManager: DatabaseManagerService,
     private readonly s3Service: S3Service,
     private readonly imageProcessingService: ImageProcessingService,
+    @Inject(PrismaClient) private readonly masterPrisma: PrismaClient,
   ) {}
 
   /**
@@ -299,6 +301,18 @@ export class CondominiosService {
       throw new BadRequestException('El condominio está desactivado');
     }
 
+    // Verificar si el plan del condominio ha vencido
+    if (condominio.planExpiresAt) {
+      const now = new Date();
+      if (new Date(condominio.planExpiresAt) < now) {
+        // Si el plan está vencido, desactivar el condominio automáticamente
+        await this.deactivateCondominio(condominio.id);
+        throw new BadRequestException(
+          'El plan del condominio ha vencido. Por favor, contacte al administrador.',
+        );
+      }
+    }
+
     return condominio;
   }
 
@@ -449,9 +463,53 @@ export class CondominiosService {
 
   /**
    * Elimina un condominio y su base de datos
+   * Solo permite la eliminación si el condominio no tiene usuarios, unidades o facturación
    */
   async deleteCondominio(id: string) {
     const condominio = await this.findOne(id);
+
+    // Validar que no tenga usuarios asociados
+    const userCount = await this.masterPrisma.user.count({
+      where: { condominioId: id },
+    });
+
+    if (userCount > 0) {
+      throw new BadRequestException(
+        `No se puede eliminar el condominio porque tiene ${userCount} usuario(s) asociado(s). Por favor, elimine primero los usuarios.`,
+      );
+    }
+
+    // Validar que no tenga unidades en su base de datos
+    try {
+      const condominioPrisma = await this.getPrismaClientForCondominio(id);
+      const unidadesCount = await condominioPrisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint as count FROM "unidad"
+      `;
+      const unidades = Number(unidadesCount[0]?.count || 0);
+
+      if (unidades > 0) {
+        throw new BadRequestException(
+          `No se puede eliminar el condominio porque tiene ${unidades} unidad(es) registrada(s). Por favor, elimine primero las unidades.`,
+        );
+      }
+    } catch (error) {
+      // Si hay error al conectar a la BD del condominio, verificar si es porque no existe
+      // o si es otro error de validación
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      // Si es otro error (ej: BD no existe), continuar con la eliminación
+      console.warn(
+        `Advertencia: No se pudo verificar unidades del condominio: ${error.message}`,
+      );
+    }
+
+    // Validar que no tenga facturación activa (plan activo con fecha de expiración futura)
+    if (condominio.planExpiresAt && condominio.planExpiresAt > new Date()) {
+      throw new BadRequestException(
+        `No se puede eliminar el condominio porque tiene un plan activo que expira el ${condominio.planExpiresAt.toLocaleDateString()}. Por favor, cancele primero el plan.`,
+      );
+    }
 
     const masterDatabaseUrl = process.env.DATABASE_URL;
     if (!masterDatabaseUrl) {

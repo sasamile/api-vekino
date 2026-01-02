@@ -14,6 +14,7 @@ import { ReservasRepository } from '../infrastructure/repositories/reservas.repo
 import { CondominiosRepository } from '../infrastructure/repositories/condominios.repository';
 import { CondominioUsersRepository } from '../infrastructure/repositories/condominio-users.repository';
 import { SchemaMigrationService } from '../infrastructure/services/schema-migration.service';
+import { CondominioExpirationService } from '../infrastructure/services/condominio-expiration.service';
 import { RoleGuard } from 'src/config/guards/require-role.guard';
 import { CondominiosController } from 'src/controllers/condominios.controller';
 import { UnidadesController } from 'src/controllers/unidades.controller';
@@ -40,6 +41,7 @@ import { ReservasController } from 'src/controllers/reservas.controller';
     ReservasRepository,
     // Infrastructure Services
     SchemaMigrationService,
+    CondominioExpirationService,
     // Guards
     RoleGuard,
     // Config Services
