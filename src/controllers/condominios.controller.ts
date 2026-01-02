@@ -661,6 +661,64 @@ export class CondominiosController {
     return this.condominiosUsersService.getCurrentUser(req);
   }
 
+  // Obtener información completa del condominio por subdominio (público - se usa antes del login)
+  // IMPORTANTE: Este endpoint debe ir ANTES de @Get(':id') para evitar conflictos de ruta
+  @ApiTags('condominios')
+  @Get('info')
+  @HttpCode(HttpStatus.OK)
+  @AllowAnonymous()
+  @ApiOperation({
+    summary: 'Obtener información completa del condominio por subdominio',
+    description:
+      'Retorna la información completa del condominio (logo, colores, datos institucionales, plan, etc.) mediante subdominio. Endpoint público que se usa antes del login.',
+  })
+  @ApiQuery({
+    name: 'subdomain',
+    required: true,
+    type: String,
+    description: 'Subdominio del condominio',
+    example: 'condominio-las-flores-actualizado',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Información completa del condominio',
+    schema: {
+      example: {
+        id: '550e8400-e29b-41d4-a716-446655440000',
+        name: 'Condominio Las Flores',
+        subdomain: 'condominio-las-flores-actualizado',
+        logo: 'https://s3.amazonaws.com/...',
+        primaryColor: '#3B82F6',
+        nit: '123456789-0',
+        address: 'Calle 123 #45-67',
+        city: 'Bogotá',
+        country: 'Colombia',
+        timezone: 'AMERICA_BOGOTA',
+        subscriptionPlan: 'PRO',
+        unitLimit: 200,
+        planExpiresAt: '2025-12-31T00:00:00.000Z',
+        activeModules: ['reservas', 'documentos', 'pqrs'],
+        isActive: true,
+        createdAt: '2025-01-01T00:00:00.000Z',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Subdominio no proporcionado o condominio no encontrado',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Condominio no encontrado',
+  })
+  async getInfoBySubdomain(@Query('subdomain') subdomain: string) {
+    if (!subdomain) {
+      throw new BadRequestException('El parámetro subdomain es requerido');
+    }
+    return this.condominiosService.getCondominioInfoBySubdomain(subdomain);
+  }
+
   @ApiTags('condominios')
   @Get(':id')
   @UseGuards(RoleGuard)
@@ -838,63 +896,6 @@ export class CondominiosController {
   })
   async validateSubdomain(@Param('subdomain') subdomain: string) {
     return this.condominiosService.validateSubdomain(subdomain);
-  }
-
-  // Obtener información completa del condominio por subdominio (público - se usa antes del login)
-  @ApiTags('condominios')
-  @Get('info')
-  @HttpCode(HttpStatus.OK)
-  @AllowAnonymous()
-  @ApiOperation({
-    summary: 'Obtener información completa del condominio por subdominio',
-    description:
-      'Retorna la información completa del condominio (logo, colores, datos institucionales, plan, etc.) mediante subdominio. Endpoint público que se usa antes del login.',
-  })
-  @ApiQuery({
-    name: 'subdomain',
-    required: true,
-    type: String,
-    description: 'Subdominio del condominio',
-    example: 'condominio-las-flores-actualizado',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Información completa del condominio',
-    schema: {
-      example: {
-        id: '550e8400-e29b-41d4-a716-446655440000',
-        name: 'Condominio Las Flores',
-        subdomain: 'condominio-las-flores-actualizado',
-        logo: 'https://s3.amazonaws.com/...',
-        primaryColor: '#3B82F6',
-        nit: '123456789-0',
-        address: 'Calle 123 #45-67',
-        city: 'Bogotá',
-        country: 'Colombia',
-        timezone: 'AMERICA_BOGOTA',
-        subscriptionPlan: 'PRO',
-        unitLimit: 200,
-        planExpiresAt: '2025-12-31T00:00:00.000Z',
-        activeModules: ['reservas', 'documentos', 'pqrs'],
-        isActive: true,
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Subdominio no proporcionado o condominio no encontrado',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Condominio no encontrado',
-  })
-  async getInfoBySubdomain(@Query('subdomain') subdomain: string) {
-    if (!subdomain) {
-      throw new BadRequestException('El parámetro subdomain es requerido');
-    }
-    return this.condominiosService.getCondominioInfoBySubdomain(subdomain);
   }
 
   // Obtener configuración visual del condominio (logo, color)

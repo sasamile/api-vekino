@@ -55,6 +55,7 @@ export class RoleGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
+    // Si no hay roles requeridos, permitir acceso (público)
     if (!requiredRoles || requiredRoles.length === 0) {
       return true;
     }
