@@ -197,6 +197,8 @@ export class ReservasRepository {
 
   /**
    * Verifica conflictos de reservas (espacio ya reservado en ese horario)
+   * Dos reservas tienen conflicto si sus horarios se solapan (no solo si una contiene a la otra)
+   * Considera reservas CONFIRMADAS y PENDIENTES
    */
   async hasConflict(
     prisma: PrismaClient,
@@ -207,12 +209,9 @@ export class ReservasRepository {
   ): Promise<boolean> {
     const condiciones: string[] = [
       `"espacioComunId" = $1`,
-      `estado = 'CONFIRMADA'::"EstadoReserva"`,
-      `(
-        ("fechaInicio" <= $2 AND "fechaFin" > $2) OR
-        ("fechaInicio" < $3 AND "fechaFin" >= $3) OR
-        ("fechaInicio" >= $2 AND "fechaFin" <= $3)
-      )`,
+      `estado IN ('CONFIRMADA'::"EstadoReserva", 'PENDIENTE'::"EstadoReserva")`,
+      // Dos intervalos se solapan si: inicio1 < fin2 Y fin1 > inicio2
+      `("fechaInicio" < $3 AND "fechaFin" > $2)`,
     ];
     const params: any[] = [espacioComunId, fechaInicio, fechaFin];
 
@@ -230,6 +229,42 @@ export class ReservasRepository {
 
     const result = await prisma.$queryRawUnsafe<any[]>(query, ...params);
     return parseInt(result[0]?.count || '0', 10) > 0;
+  }
+
+  /**
+   * Obtiene las horas ocupadas de un espacio común en un día específico
+   */
+  async getHorasOcupadas(
+    prisma: PrismaClient,
+    espacioComunId: string,
+    fecha: Date,
+  ): Promise<Array<{ fechaInicio: Date; fechaFin: Date; estado: string }>> {
+    // Obtener el inicio y fin del día
+    const inicioDia = new Date(fecha);
+    inicioDia.setHours(0, 0, 0, 0);
+    const finDia = new Date(fecha);
+    finDia.setHours(23, 59, 59, 999);
+
+    const query = `
+      SELECT 
+        "fechaInicio"::text as "fechaInicio",
+        "fechaFin"::text as "fechaFin",
+        estado
+      FROM "reserva"
+      WHERE "espacioComunId" = $1
+        AND estado IN ('CONFIRMADA'::"EstadoReserva", 'PENDIENTE'::"EstadoReserva")
+        AND "fechaInicio" < $2
+        AND "fechaFin" > $3
+      ORDER BY "fechaInicio" ASC
+    `;
+
+    const reservas = await prisma.$queryRawUnsafe<any[]>(query, espacioComunId, finDia, inicioDia);
+
+    return reservas.map((r) => ({
+      fechaInicio: new Date(r.fechaInicio),
+      fechaFin: new Date(r.fechaFin),
+      estado: r.estado,
+    }));
   }
 
   /**

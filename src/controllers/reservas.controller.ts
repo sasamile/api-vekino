@@ -264,6 +264,37 @@ export class ReservasController {
   }
 
   /**
+   * Obtener horas ocupadas de un espacio común en un día específico
+   */
+  @Get('espacios/:espacioComunId/disponibilidad')
+  @HttpCode(HttpStatus.OK)
+  @RequireRole(['ADMIN', 'PROPIETARIO', 'ARRENDATARIO', 'RESIDENTE'])
+  @ApiOperation({
+    summary: 'Obtener horas ocupadas/disponibles',
+    description: 'Obtiene las horas ocupadas de un espacio común en un día específico. Útil para mostrar disponibilidad en el frontend.',
+  })
+  @ApiParam({ name: 'espacioComunId', description: 'ID del espacio común' })
+  @ApiQuery({
+    name: 'fecha',
+    required: true,
+    type: String,
+    description: 'Fecha en formato YYYY-MM-DD',
+    example: '2026-01-02',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Horas ocupadas del espacio común' })
+  @ApiResponse({ status: 404, description: 'Espacio común no encontrado' })
+  async getHorasOcupadas(
+    @Subdomain() subdomain: string | null,
+    @Param('espacioComunId') espacioComunId: string,
+    @Query('fecha') fecha: string,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.reservasService.getHorasOcupadas(condominioId, espacioComunId, fecha);
+  }
+
+  /**
    * Obtener reserva por ID
    */
   @Get(':reservaId')

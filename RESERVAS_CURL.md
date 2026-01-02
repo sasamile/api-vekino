@@ -183,22 +183,22 @@ curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas' 
     "unidadId": "660e8400-e29b-41d4-a716-446655440001",
     "fechaInicio": "2025-01-15T10:00:00.000Z",
     "fechaFin": "2025-01-15T14:00:00.000Z",
-    "cantidadPersonas": 30,
-    "motivo": "Celebración de cumpleaños",
-    "observaciones": "Necesitamos mesas y sillas"
+    "motivo": "Celebración de cumpleaños"
   }'
 ```
 
 **Campos opcionales:**
 - `unidadId`: Solo si es necesario relacionar con una unidad
-- `cantidadPersonas`: Número de personas
 - `motivo`: Motivo de la reserva
-- `observaciones`: Observaciones adicionales
+
+**Campos removidos:**
+- `cantidadPersonas`: Ya no es necesario (removido del formulario)
+- `observaciones`: Solo ADMIN puede agregar observaciones cuando aprueba/edita una reserva
 
 **Nota:** 
 - El estado inicial será `PENDIENTE` si el espacio requiere aprobación, o `CONFIRMADA` si no requiere aprobación.
-- El sistema valida automáticamente que la reserva esté dentro de los **días** y **horarios disponibles** del espacio común (definidos en `horariosDisponibilidad`).
-  - Ejemplo: Si el espacio solo está disponible los **Martes y Miércoles** de 9:00 AM a 10:00 PM, no podrás crear una reserva para el **Jueves** o fuera de ese horario.
+- El sistema valida automáticamente que no haya conflictos de horarios (no permite reservas solapadas).
+- Si hay una reserva de 2:00 PM a 4:00 PM, otra reserva de 2:10 PM a 4:10 PM no será permitida porque se solapan.
 
 ### 2. Ver Todas las Reservas ⭐
 
@@ -259,7 +259,7 @@ curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas/77
 
 **Nota:** Los usuarios solo pueden ver sus propias reservas, ADMIN puede ver cualquier reserva.
 
-### 4. Actualizar Reserva
+### 5. Actualizar Reserva
 
 **Usuarios pueden actualizar sus propias reservas (fechas, motivo, etc. pero no el estado). ADMIN puede actualizar cualquier reserva:**
 
@@ -288,7 +288,12 @@ curl -X PUT 'http://condominio-las-flores-actualizado.localhost:3001/reservas/77
 
 **Nota:** Al cambiar fechas o espacio común, se verificará automáticamente que no haya conflictos con otras reservas confirmadas.
 
-### 5. Cancelar Reserva
+**Nota sobre Observaciones:**
+- Las `observaciones` solo pueden ser agregadas/editadas por ADMIN.
+- Los usuarios NO pueden agregar observaciones al crear o actualizar reservas.
+- ADMIN puede agregar observaciones cuando aprueba o edita una reserva (ej: "Por favor dejar todo limpio al finalizar").
+
+### 6. Cancelar Reserva
 
 **Usuarios pueden cancelar sus propias reservas, ADMIN puede cancelar cualquier reserva:**
 
@@ -298,7 +303,7 @@ curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas/7
   -b cookies.txt
 ```
 
-### 6. Aprobar Reserva (ADMIN)
+### 7. Aprobar Reserva (ADMIN)
 
 **Solo ADMIN puede aprobar reservas pendientes:**
 
@@ -310,7 +315,7 @@ curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas/7
 
 Esto cambia el estado de `PENDIENTE` a `CONFIRMADA`.
 
-### 7. Rechazar Reserva (ADMIN)
+### 8. Rechazar Reserva (ADMIN)
 
 **Solo ADMIN puede rechazar reservas pendientes:**
 
@@ -322,7 +327,7 @@ curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas/7
 
 Esto cambia el estado de `PENDIENTE` a `CANCELADA`.
 
-### 8. Eliminar Reserva (ADMIN)
+### 9. Eliminar Reserva (ADMIN)
 
 **Solo ADMIN puede eliminar permanentemente una reserva:**
 
@@ -372,27 +377,38 @@ curl -X DELETE 'http://condominio-las-flores-actualizado.localhost:3001/reservas
      -b cookies.txt
    ```
 
-2. **Crear una reserva:**
+2. **Ver horas disponibles de un espacio:**
+   ```bash
+   curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas/espacios/{espacioId}/disponibilidad?fecha=2026-01-02' \
+     -b cookies.txt
+   ```
+
+3. **Crear una reserva:**
    ```bash
    curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas' \
      -H 'Content-Type: application/json' \
      -b cookies.txt \
-     -d '{ ... }'
+     -d '{
+       "espacioComunId": "...",
+       "fechaInicio": "2026-01-02T10:00:00.000Z",
+       "fechaFin": "2026-01-02T12:00:00.000Z",
+       "motivo": "Cumpleaños"
+     }'
    ```
 
-3. **Ver mis reservas:**
+4. **Ver mis reservas:**
    ```bash
    curl -X GET 'http://condominio-las-flores-actualizado.localhost:3001/reservas?soloMias=true' \
      -b cookies.txt
    ```
 
-4. **Cancelar mi reserva:**
+5. **Cancelar mi reserva:**
    ```bash
    curl -X POST 'http://condominio-las-flores-actualizado.localhost:3001/reservas/{reservaId}/cancelar' \
      -b cookies.txt
    ```
 
-5. **Reprogramar mi reserva (cambiar fechas):**
+6. **Reprogramar mi reserva (cambiar fechas):**
    ```bash
    curl -X PUT 'http://condominio-las-flores-actualizado.localhost:3001/reservas/{reservaId}' \
      -H 'Content-Type: application/json' \
@@ -496,19 +512,24 @@ curl -X DELETE 'http://condominio-las-flores-actualizado.localhost:3001/reservas
    - **ADMIN**: Puede crear/editar/eliminar espacios comunes y gestionar todas las reservas (aprobar, rechazar, cancelar, eliminar).
    - **Usuarios regulares**: Pueden crear reservas y gestionar solo las suyas (ver, actualizar fechas/motivo, cancelar).
 
-3. **Validación de Horarios Disponibles**: El sistema valida automáticamente que las reservas solo se puedan hacer en los **días de la semana** y **horarios** definidos en `horariosDisponibilidad` del espacio común. 
-   - Si intentas crear una reserva en un día que no está disponible (ej: reservar un jueves cuando el espacio solo está disponible lunes y martes), recibirás un error.
-   - Si intentas crear una reserva fuera del horario permitido (ej: reservar a las 23:00 cuando el espacio solo está disponible hasta las 22:00), recibirás un error.
+3. **Validación de Conflictos de Reservas**: El sistema verifica automáticamente que no haya conflictos de horarios al crear o actualizar reservas. 
+   - Se consideran reservas con estado `CONFIRMADA` y `PENDIENTE` para detectar conflictos.
+   - Dos reservas tienen conflicto si sus horarios se solapan (ej: reserva de 2:00 PM a 4:00 PM y otra de 2:10 PM a 4:10 PM se solapan).
+   - El endpoint `/reservas/espacios/:espacioComunId/disponibilidad?fecha=YYYY-MM-DD` retorna las horas ocupadas para un día específico.
 
-4. **Conflictos de Reservas**: El sistema verifica automáticamente que no haya conflictos de horarios al crear o actualizar reservas. Solo se consideran reservas con estado `CONFIRMADA` para detectar conflictos.
+4. **Cantidad de Personas**: Este campo ha sido removido del formulario ya que no es necesario (se alquila el espacio completo, no por cantidad de personas).
 
-5. **Estados de Reserva**:
+5. **Observaciones**: Solo ADMIN puede agregar/editar observaciones en las reservas. Los usuarios NO pueden agregar observaciones al crear reservas.
+
+6. **Estados de Reserva**:
    - `PENDIENTE`: Esperando aprobación de ADMIN (si el espacio requiere aprobación).
    - `CONFIRMADA`: Reserva aprobada y confirmada.
    - `CANCELADA`: Reserva cancelada (por usuario o rechazada por ADMIN).
    - `COMPLETADA`: Reserva completada (el evento ya ocurrió).
 
-6. **Precio Total**: Se calcula automáticamente basado en `precioPorUnidad` del espacio común y la duración de la reserva, según la `unidadTiempo` configurada.
+7. **Precio Total**: Se calcula automáticamente basado en `precioPorUnidad` del espacio común y la duración de la reserva, según la `unidadTiempo` configurada.
 
-7. **Subdominio**: Recuerda usar el subdominio correcto en la URL. Ejemplo: `http://condominio-las-flores-actualizado.localhost:3001`
+8. **Subdominio**: Recuerda usar el subdominio correcto en la URL. Ejemplo: `http://condominio-las-flores-actualizado.localhost:3001`
+
+9. **Filtro de Fechas**: El filtro `fechaDesde` y `fechaHasta` filtra correctamente por la fecha de inicio de las reservas. Usa formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss).
 

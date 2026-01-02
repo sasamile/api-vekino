@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { PrismaClient } from 'generated/prisma/client';
 import { CondominiosService } from './condominios.service';
-
 import { CreateReservaDto } from '../../domain/dto/reservas/create-reserva.dto';
 import { UpdateReservaDto, EstadoReserva } from '../../domain/dto/reservas/update-reserva.dto';
 import { QueryReservasDto } from '../../domain/dto/reservas/query-reservas.dto';
@@ -77,7 +76,7 @@ export class ReservasService {
       throw new BadRequestException('No se pueden hacer reservas en fechas pasadas');
     }
 
-    // Verificar conflictos de reservas
+    // Verificar conflictos de reservas (incluye PENDIENTES y CONFIRMADAS)
     const hasConflict = await this.reservasRepository.hasConflict(
       condominioPrisma,
       dto.espacioComunId,
@@ -120,10 +119,10 @@ export class ReservasService {
       unidadId: dto.unidadId,
       fechaInicio: fechaInicio,
       fechaFin: fechaFin,
-      cantidadPersonas: dto.cantidadPersonas,
+      cantidadPersonas: null, // Removido del formulario, siempre null
       estado: estadoInicial,
       motivo: dto.motivo,
-      observaciones: dto.observaciones,
+      observaciones: null, // Solo ADMIN puede agregar observaciones
       precioTotal: precioTotal,
       createdBy: createdBy,
     };
@@ -181,6 +180,45 @@ export class ReservasService {
     }
 
     return reserva;
+  }
+
+  /**
+   * Obtiene las horas ocupadas de un espacio común en un día específico
+   */
+  async getHorasOcupadas(
+    condominioId: string,
+    espacioComunId: string,
+    fecha: string,
+  ) {
+    await this.condominiosService.findOne(condominioId);
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Verificar que el espacio común existe
+    const espacioComun = await this.espaciosComunesRepository.findById(
+      condominioPrisma,
+      espacioComunId,
+    );
+    if (!espacioComun) {
+      throw new NotFoundException(`Espacio común con ID ${espacioComunId} no encontrado`);
+    }
+
+    const fechaDate = new Date(fecha);
+    const horasOcupadas = await this.reservasRepository.getHorasOcupadas(
+      condominioPrisma,
+      espacioComunId,
+      fechaDate,
+    );
+
+    return {
+      espacioComunId,
+      fecha: fechaDate.toISOString().split('T')[0],
+      horasOcupadas: horasOcupadas.map((r) => ({
+        fechaInicio: r.fechaInicio.toISOString(),
+        fechaFin: r.fechaFin.toISOString(),
+        estado: r.estado,
+      })),
+    };
   }
 
   /**
@@ -258,10 +296,12 @@ export class ReservasService {
     }
 
     if (dto.unidadId !== undefined) updates.unidadId = dto.unidadId;
-    if (dto.cantidadPersonas !== undefined) updates.cantidadPersonas = dto.cantidadPersonas;
     if (dto.estado !== undefined) updates.estado = dto.estado;
     if (dto.motivo !== undefined) updates.motivo = dto.motivo;
-    if (dto.observaciones !== undefined) updates.observaciones = dto.observaciones;
+    // Observaciones solo pueden ser editadas por ADMIN
+    if (dto.observaciones !== undefined && isAdmin) {
+      updates.observaciones = dto.observaciones;
+    }
 
     return this.reservasRepository.update(condominioPrisma, reservaId, updates);
   }
@@ -307,4 +347,3 @@ export class ReservasService {
     return { message: 'Reserva eliminada exitosamente' };
   }
 }
-

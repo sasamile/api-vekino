@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/swagger';
 import { CreateReservaDto } from './create-reserva.dto';
-import { IsEnum, IsOptional } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum EstadoReserva {
@@ -19,5 +19,13 @@ export class UpdateReservaDto extends PartialType(CreateReservaDto) {
   @IsEnum(EstadoReserva)
   @IsOptional()
   estado?: EstadoReserva;
+
+  @ApiPropertyOptional({
+    description: 'Observaciones adicionales (solo ADMIN puede editar)',
+    example: 'Por favor dejar todo limpio al finalizar',
+  })
+  @IsString()
+  @IsOptional()
+  observaciones?: string;
 }
 

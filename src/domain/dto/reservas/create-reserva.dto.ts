@@ -43,17 +43,6 @@ export class CreateReservaDto {
   fechaFin: string;
 
   @ApiPropertyOptional({
-    description: 'Cantidad de personas',
-    example: 30,
-    minimum: 1,
-  })
-  @IsNumber()
-  @IsOptional()
-  @Type(() => Number)
-  @Min(1)
-  cantidadPersonas?: number;
-
-  @ApiPropertyOptional({
     description: 'Motivo de la reserva',
     example: 'Celebración de cumpleaños',
   })
@@ -61,12 +50,7 @@ export class CreateReservaDto {
   @IsOptional()
   motivo?: string;
 
-  @ApiPropertyOptional({
-    description: 'Observaciones adicionales',
-    example: 'Necesitamos mesas y sillas',
-  })
-  @IsString()
-  @IsOptional()
-  observaciones?: string;
+  // cantidadPersonas y observaciones removidos - cantidadPersonas no es necesario,
+  // observaciones solo para ADMIN
 }
 
