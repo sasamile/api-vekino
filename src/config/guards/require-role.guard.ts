@@ -55,12 +55,55 @@ export class RoleGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    // Si no hay roles requeridos, permitir acceso (público)
+    const request = context.switchToHttp().getRequest();
+
+    // Si no hay roles requeridos, aún necesitamos obtener el usuario si existe una sesión
+    // para que los controladores puedan acceder a req.user
     if (!requiredRoles || requiredRoles.length === 0) {
+      // Intentar obtener el usuario de la sesión si existe
+      try {
+        const headers = fromNodeHeaders(request.headers);
+        const session = await auth.api.getSession({ headers });
+        
+        if (session?.user?.id) {
+          // Detectar subdominio
+          let subdomain = (request as any).subdomain;
+          if (!subdomain) {
+            const host = request.headers.host || (request as any).hostname;
+            if (host) {
+              const hostWithoutPort = host.split(':')[0];
+              const parts = hostWithoutPort.split('.');
+              if (parts.length === 2 && parts[1] === 'localhost') {
+                subdomain = parts[0];
+              }
+            }
+          }
+          
+          if (subdomain) {
+            // Buscar usuario en la BD del condominio
+            try {
+              const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
+              const condominioPrisma = await this.condominiosService.getPrismaClientForCondominio(condominio.id);
+              const users = await condominioPrisma.$queryRaw<any[]>`
+                SELECT * FROM "user" WHERE id = ${session.user.id} LIMIT 1
+              `;
+              if (users[0]) {
+                (request as any).user = users[0];
+                (request as any).session = session;
+                console.log('✅ Usuario establecido en request para endpoint sin roles requeridos:', users[0].email);
+              }
+            } catch (error) {
+              console.error('❌ Error al buscar usuario en BD del condominio (sin roles requeridos):', error);
+              // Si falla, continuar sin establecer usuario (acceso público)
+            }
+          }
+        }
+      } catch (error) {
+        // Si falla al obtener sesión, continuar sin establecer usuario (acceso público)
+        console.log('ℹ️ No se pudo obtener sesión (sin roles requeridos), permitiendo acceso público');
+      }
       return true;
     }
-
-    const request = context.switchToHttp().getRequest();
 
     // Obtener la sesión del request (si AuthGuard la agregó) o directamente con Better Auth API
     let session = (request as any).session || (request as any).user;

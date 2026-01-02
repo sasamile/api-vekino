@@ -65,7 +65,17 @@ export class ComunicacionController {
 
   private getUserFromRequest(req: Request): { id: string; role: string } | null {
     const user = (req as any).user;
-    if (!user) return null;
+    if (!user) {
+      console.error('❌ Usuario no encontrado en req.user. Request headers:', {
+        host: req.headers.host,
+        cookie: req.headers.cookie ? 'presente' : 'ausente',
+      });
+      return null;
+    }
+    if (!user.id) {
+      console.error('❌ Usuario encontrado pero sin ID:', user);
+      return null;
+    }
     return { id: user.id, role: user.role };
   }
 
