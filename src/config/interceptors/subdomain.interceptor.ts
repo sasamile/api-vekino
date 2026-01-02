@@ -47,7 +47,13 @@ export class SubdomainInterceptor implements NestInterceptor {
 
     // Si hay más de 2 partes, el subdominio es la primera
     // Ej: condominio1.tudominio.com -> condominio1
+    // Ej: condominio-las-flores-actualizado.vekino.site -> condominio-las-flores-actualizado
     if (parts.length > 2) {
+      // Si termina en vekino.site, tomar todas las partes excepto las últimas 2
+      if (parts[parts.length - 2] === 'vekino' && parts[parts.length - 1] === 'site') {
+        return parts.slice(0, -2).join('-');
+      }
+      // Para otros dominios, tomar la primera parte
       return parts[0];
     }
 

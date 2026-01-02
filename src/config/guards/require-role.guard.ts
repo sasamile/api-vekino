@@ -67,77 +67,94 @@ export class RoleGuard implements CanActivate {
         if (host) {
           const hostWithoutPort = host.split(':')[0];
           const parts = hostWithoutPort.split('.');
-          if (parts.length === 2 && parts[1] === 'localhost') {
-            subdomain = parts[0];
+          // Detectar subdominio para localhost o vekino.site
+          if (parts.length >= 2) {
+            if (parts[parts.length - 1] === 'localhost' || 
+                (parts.length >= 3 && parts[parts.length - 2] === 'vekino' && parts[parts.length - 1] === 'site')) {
+              // Para localhost: condominio.localhost -> condominio
+              // Para vekino.site: condominio.vekino.site -> condominio
+              subdomain = parts.slice(0, -2).join('-') || parts[0];
+            }
           }
         }
       }
       
       if (subdomain) {
         // Para usuarios de condominio, las sesiones están en la BD del condominio
-        try {
-          const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
-          const condominioPrisma = await this.condominiosService.getPrismaClientForCondominio(condominio.id);
-          
-          // Obtener el token de la cookie
-          const cookieName = 'better-auth.session_token';
-          let sessionToken: string | null = null;
-          
-          if ((request as any).cookies && (request as any).cookies[cookieName]) {
-            sessionToken = (request as any).cookies[cookieName];
-          } else if (request.headers.cookie) {
-            const cookies = request.headers.cookie.split(';').reduce((acc: any, cookie: string) => {
-              const trimmed = cookie.trim();
-              const equalIndex = trimmed.indexOf('=');
-              if (equalIndex > 0) {
-                const key = trimmed.substring(0, equalIndex).trim();
-                const value = trimmed.substring(equalIndex + 1).trim();
-                if (key && value) {
-                  acc[key] = value;
-                }
-              }
-              return acc;
-            }, {});
-            sessionToken = cookies[cookieName] || null;
-          }
-          
-          if (sessionToken) {
-            // Buscar sesión en la BD del condominio
-            console.log('🔍 Buscando sesión en BD del condominio con token:', sessionToken.substring(0, 30) + '...');
-            const sessions = await condominioPrisma.$queryRaw<any[]>`
-              SELECT s.*, u.*
-              FROM "session" s
-              INNER JOIN "user" u ON s."userId" = u.id
-              WHERE s.token = ${sessionToken}
-                AND s."expiresAt" > CURRENT_TIMESTAMP
-              LIMIT 1
-            `;
-            
-            console.log('📊 Sesiones encontradas:', sessions.length);
-            if (sessions[0]) {
-              (request as any).user = sessions[0];
-              console.log('✅ Usuario establecido en request para endpoint sin roles requeridos:', sessions[0].email);
-            } else {
-              console.log('❌ No se encontró sesión válida en BD del condominio');
-              // Intentar buscar sin condición de expiración para debug
-              const expiredSessions = await condominioPrisma.$queryRaw<any[]>`
-                SELECT s.token, s."expiresAt"::text, CURRENT_TIMESTAMP::text as "now"
-                FROM "session" s
-                WHERE s.token = ${sessionToken}
-                LIMIT 1
-              `;
-              if (expiredSessions.length > 0) {
-                console.log('⚠️ Sesión encontrada pero expirada:', expiredSessions[0]);
-              } else {
-                console.log('❌ No existe ninguna sesión con ese token');
+        // Obtener el token de la cookie primero (antes de conectar a BD)
+        const cookieName = 'better-auth.session_token';
+        let sessionToken: string | null = null;
+        
+        if ((request as any).cookies && (request as any).cookies[cookieName]) {
+          sessionToken = (request as any).cookies[cookieName];
+        } else if (request.headers.cookie) {
+          const cookies = request.headers.cookie.split(';').reduce((acc: any, cookie: string) => {
+            const trimmed = cookie.trim();
+            const equalIndex = trimmed.indexOf('=');
+            if (equalIndex > 0) {
+              const key = trimmed.substring(0, equalIndex).trim();
+              const value = trimmed.substring(equalIndex + 1).trim();
+              if (key && value) {
+                acc[key] = value;
               }
             }
+            return acc;
+          }, {});
+          sessionToken = cookies[cookieName] || null;
+        }
+        
+        if (!sessionToken) {
+          console.log('❌ No se encontró token de sesión en las cookies');
+          return true; // Permitir acceso público si no hay token
+        }
+        
+        console.log('🔍 Token encontrado, buscando sesión en BD del condominio. Subdominio:', subdomain);
+        console.log('🔑 Token (primeros 50 chars):', sessionToken.substring(0, 50));
+        
+        try {
+          // Conectar a BD del condominio
+          const condominio = await this.condominiosService.findCondominioBySubdomain(subdomain);
+          console.log('✅ Condominio encontrado:', condominio.name);
+          
+          const condominioPrisma = await this.condominiosService.getPrismaClientForCondominio(condominio.id);
+          console.log('✅ Cliente Prisma obtenido para condominio');
+          
+          // Buscar sesión
+          const sessions = await condominioPrisma.$queryRaw<any[]>`
+            SELECT s.*, u.*
+            FROM "session" s
+            INNER JOIN "user" u ON s."userId" = u.id
+            WHERE s.token = ${sessionToken}
+              AND s."expiresAt" > CURRENT_TIMESTAMP
+            LIMIT 1
+          `;
+          
+          console.log('📊 Sesiones encontradas:', sessions.length);
+          if (sessions[0]) {
+            (request as any).user = sessions[0];
+            console.log('✅ Usuario establecido en request para endpoint sin roles requeridos:', sessions[0].email);
           } else {
-            console.log('❌ No se encontró token de sesión en las cookies');
+            console.log('❌ No se encontró sesión válida en BD del condominio');
+            // Intentar buscar sin condición de expiración para debug
+            const allSessions = await condominioPrisma.$queryRaw<any[]>`
+              SELECT s.token, s."expiresAt"::text, CURRENT_TIMESTAMP::text as "now"
+              FROM "session" s
+              WHERE s.token = ${sessionToken}
+              LIMIT 1
+            `;
+            if (allSessions.length > 0) {
+              console.log('⚠️ Sesión encontrada pero expirada:', allSessions[0]);
+            } else {
+              console.log('❌ No existe ninguna sesión con ese token en la BD');
+            }
           }
-        } catch (error) {
-          console.error('❌ Error al buscar sesión en BD del condominio (sin roles requeridos):', error);
-          // Si falla, continuar sin establecer usuario (acceso público)
+        } catch (dbError: any) {
+          console.error('❌ Error de BD al buscar sesión:', dbError.message);
+          if (dbError.message?.includes('timeout') || dbError.message?.includes('Connection terminated')) {
+            console.error('⚠️ Timeout de conexión a la BD. Verifica la conexión a la base de datos.');
+          }
+          // Si falla por timeout o conexión, permitir acceso pero sin usuario
+          // El controlador deberá manejar el caso de usuario no encontrado
         }
       } else {
         // Sin subdominio, intentar con Better Auth (para SUPERADMIN)

@@ -103,7 +103,9 @@ export class ComunicacionController {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     const user = this.getUserFromRequest(req);
     if (!user) {
-      throw new BadRequestException('Usuario no encontrado en la sesión');
+      throw new BadRequestException(
+        'Usuario no encontrado en la sesión. Por favor, inicia sesión nuevamente.',
+      );
     }
     return this.ticketsService.createTicket(condominioId, user.id, dto);
   }
