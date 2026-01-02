@@ -156,6 +156,18 @@ export class DatabaseManagerService implements OnModuleDestroy {
           console.log('✅ Tablas de comunicación creadas correctamente');
         }
       }
+
+      // Verificar si las nuevas tablas de red social existen, si no, crearlas
+      try {
+        await prisma.$queryRaw`SELECT 1 FROM "post_reaction" LIMIT 1`;
+        console.log('✅ Tabla post_reaction ya existe');
+      } catch (error: any) {
+        if (error.message?.includes('does not exist') || error.code === '42P01') {
+          console.log('📝 Tablas de red social no existen. Creando tablas de reacciones, attachments y chat...');
+          await this.createRedSocialTables(prisma);
+          console.log('✅ Tablas de red social creadas correctamente');
+        }
+      }
       
       console.log('✅ El esquema ya está inicializado en esta base de datos');
       return;
@@ -364,6 +376,8 @@ export class DatabaseManagerService implements OnModuleDestroy {
       { name: 'EstadoPago', values: ['PENDIENTE', 'PROCESANDO', 'APROBADO', 'RECHAZADO', 'CANCELADO'] },
       { name: 'MetodoPago', values: ['WOMPI', 'EFECTIVO'] },
       { name: 'EstadoTicket', values: ['ABIERTO', 'EN_PROGRESO', 'RESUELTO', 'CERRADO'] },
+      { name: 'TipoReaccion', values: ['LIKE', 'LOVE', 'LAUGH', 'WOW', 'SAD', 'ANGRY'] },
+      { name: 'TipoArchivo', values: ['IMAGEN', 'VIDEO', 'AUDIO', 'DOCUMENTO'] },
     ];
 
     for (const enumDef of enums) {
@@ -595,14 +609,60 @@ export class DatabaseManagerService implements OnModuleDestroy {
       );
     `);
 
-    // Crear tabla PostLike
+    // Crear tabla PostReaction (reemplaza PostLike)
     await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "post_like" (
+      CREATE TABLE IF NOT EXISTS "post_reaction" (
         "id" STRING NOT NULL,
         "postId" STRING NOT NULL,
         "userId" STRING NOT NULL,
+        "tipo" "TipoReaccion" NOT NULL DEFAULT 'LIKE',
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT "post_like_pkey" PRIMARY KEY ("id")
+        CONSTRAINT "post_reaction_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla PostAttachment (archivos multimedia)
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post_attachment" (
+        "id" STRING NOT NULL,
+        "postId" STRING NOT NULL,
+        "tipo" "TipoArchivo" NOT NULL,
+        "url" STRING NOT NULL,
+        "nombre" STRING,
+        "tamaño" INT,
+        "mimeType" STRING,
+        "thumbnailUrl" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "post_attachment_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla ChatMessage
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "chat_message" (
+        "id" STRING NOT NULL,
+        "remitenteId" STRING NOT NULL,
+        "destinatarioId" STRING NOT NULL,
+        "contenido" STRING NOT NULL,
+        "leido" BOOL NOT NULL DEFAULT false,
+        "leidoAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "chat_message_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla ChatAttachment
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "chat_attachment" (
+        "id" STRING NOT NULL,
+        "mensajeId" STRING NOT NULL,
+        "tipo" "TipoArchivo" NOT NULL,
+        "url" STRING NOT NULL,
+        "nombre" STRING,
+        "tamaño" INT,
+        "mimeType" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "chat_attachment_pkey" PRIMARY KEY ("id")
       );
     `);
 
@@ -624,13 +684,22 @@ export class DatabaseManagerService implements OnModuleDestroy {
       prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_comment_postId_idx" ON "post_comment"("postId");`),
       prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_comment_userId_idx" ON "post_comment"("userId");`),
       prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_comment_createdAt_idx" ON "post_comment"("createdAt");`),
-      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_like_postId_idx" ON "post_like"("postId");`),
-      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_like_userId_idx" ON "post_like"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_reaction_postId_idx" ON "post_reaction"("postId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_reaction_userId_idx" ON "post_reaction"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_reaction_tipo_idx" ON "post_reaction"("tipo");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_attachment_postId_idx" ON "post_attachment"("postId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_attachment_tipo_idx" ON "post_attachment"("tipo");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_remitenteId_idx" ON "chat_message"("remitenteId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_destinatarioId_idx" ON "chat_message"("destinatarioId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_leido_idx" ON "chat_message"("leido");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_createdAt_idx" ON "chat_message"("createdAt");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_attachment_mensajeId_idx" ON "chat_attachment"("mensajeId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_attachment_tipo_idx" ON "chat_attachment"("tipo");`),
     ]);
 
-    // Crear unique constraint para post_like (un usuario solo puede dar like una vez por post)
+    // Crear unique constraint para post_reaction (un usuario solo puede tener una reacción por post)
     try {
-      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "post_like_postId_userId_key" ON "post_like"("postId", "userId");`);
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "post_reaction_postId_userId_key" ON "post_reaction"("postId", "userId");`);
     } catch (error: any) {
       // Ignorar si ya existe
     }
@@ -685,13 +754,175 @@ export class DatabaseManagerService implements OnModuleDestroy {
     }
 
     try {
-      await prisma.$executeRawUnsafe(`ALTER TABLE "post_like" ADD CONSTRAINT IF NOT EXISTS "post_like_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_reaction" ADD CONSTRAINT IF NOT EXISTS "post_reaction_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
     } catch (error: any) {
       // Ignorar si ya existe
     }
 
     try {
-      await prisma.$executeRawUnsafe(`ALTER TABLE "post_like" ADD CONSTRAINT IF NOT EXISTS "post_like_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_reaction" ADD CONSTRAINT IF NOT EXISTS "post_reaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_attachment" ADD CONSTRAINT IF NOT EXISTS "post_attachment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "chat_message" ADD CONSTRAINT IF NOT EXISTS "chat_message_remitenteId_fkey" FOREIGN KEY ("remitenteId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "chat_message" ADD CONSTRAINT IF NOT EXISTS "chat_message_destinatarioId_fkey" FOREIGN KEY ("destinatarioId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "chat_attachment" ADD CONSTRAINT IF NOT EXISTS "chat_attachment_mensajeId_fkey" FOREIGN KEY ("mensajeId") REFERENCES "chat_message"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+  }
+
+  /**
+   * Crea las tablas de red social (reacciones, attachments, chat) si no existen
+   */
+  private async createRedSocialTables(prisma: PrismaClient): Promise<void> {
+    // Crear enums si no existen
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TYPE IF NOT EXISTS "TipoReaccion" AS ENUM ('LIKE', 'LOVE', 'LAUGH', 'WOW', 'SAD', 'ANGRY');
+      `);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE TYPE IF NOT EXISTS "TipoArchivo" AS ENUM ('IMAGEN', 'VIDEO', 'AUDIO', 'DOCUMENTO');
+      `);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    // Crear tabla PostReaction (reemplaza PostLike)
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post_reaction" (
+        "id" STRING NOT NULL,
+        "postId" STRING NOT NULL,
+        "userId" STRING NOT NULL,
+        "tipo" "TipoReaccion" NOT NULL DEFAULT 'LIKE',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "post_reaction_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla PostAttachment (archivos multimedia)
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post_attachment" (
+        "id" STRING NOT NULL,
+        "postId" STRING NOT NULL,
+        "tipo" "TipoArchivo" NOT NULL,
+        "url" STRING NOT NULL,
+        "nombre" STRING,
+        "tamaño" INT,
+        "mimeType" STRING,
+        "thumbnailUrl" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "post_attachment_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla ChatMessage
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "chat_message" (
+        "id" STRING NOT NULL,
+        "remitenteId" STRING NOT NULL,
+        "destinatarioId" STRING NOT NULL,
+        "contenido" STRING NOT NULL,
+        "leido" BOOL NOT NULL DEFAULT false,
+        "leidoAt" TIMESTAMP(3),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "chat_message_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear tabla ChatAttachment
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "chat_attachment" (
+        "id" STRING NOT NULL,
+        "mensajeId" STRING NOT NULL,
+        "tipo" "TipoArchivo" NOT NULL,
+        "url" STRING NOT NULL,
+        "nombre" STRING,
+        "tamaño" INT,
+        "mimeType" STRING,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "chat_attachment_pkey" PRIMARY KEY ("id")
+      );
+    `);
+
+    // Crear índices
+    await Promise.all([
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_reaction_postId_idx" ON "post_reaction"("postId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_reaction_userId_idx" ON "post_reaction"("userId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_reaction_tipo_idx" ON "post_reaction"("tipo");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_attachment_postId_idx" ON "post_attachment"("postId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "post_attachment_tipo_idx" ON "post_attachment"("tipo");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_remitenteId_idx" ON "chat_message"("remitenteId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_destinatarioId_idx" ON "chat_message"("destinatarioId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_leido_idx" ON "chat_message"("leido");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_message_createdAt_idx" ON "chat_message"("createdAt");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_attachment_mensajeId_idx" ON "chat_attachment"("mensajeId");`),
+      prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "chat_attachment_tipo_idx" ON "chat_attachment"("tipo");`),
+    ]);
+
+    // Crear unique constraint para post_reaction
+    try {
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "post_reaction_postId_userId_key" ON "post_reaction"("postId", "userId");`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    // Crear foreign keys
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_reaction" ADD CONSTRAINT IF NOT EXISTS "post_reaction_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_reaction" ADD CONSTRAINT IF NOT EXISTS "post_reaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "post_attachment" ADD CONSTRAINT IF NOT EXISTS "post_attachment_postId_fkey" FOREIGN KEY ("postId") REFERENCES "post"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "chat_message" ADD CONSTRAINT IF NOT EXISTS "chat_message_remitenteId_fkey" FOREIGN KEY ("remitenteId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "chat_message" ADD CONSTRAINT IF NOT EXISTS "chat_message_destinatarioId_fkey" FOREIGN KEY ("destinatarioId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
+    } catch (error: any) {
+      // Ignorar si ya existe
+    }
+
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "chat_attachment" ADD CONSTRAINT IF NOT EXISTS "chat_attachment_mensajeId_fkey" FOREIGN KEY ("mensajeId") REFERENCES "chat_message"("id") ON DELETE CASCADE ON UPDATE CASCADE;`);
     } catch (error: any) {
       // Ignorar si ya existe
     }

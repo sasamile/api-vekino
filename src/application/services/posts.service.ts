@@ -82,11 +82,17 @@ export class PostsService {
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
+    // Convertir activo de string a boolean si viene como string
+    let activo: boolean | undefined = query.activo;
+    if (typeof query.activo === 'string') {
+      activo = query.activo === 'true';
+    }
+
     const filters: any = {
       page: query.page,
       limit: query.limit,
       userId: query.userId,
-      activo: query.activo !== undefined ? query.activo : true,
+      activo: activo !== undefined ? activo : true,
     };
 
     return await this.postsRepository.findAll(condominioPrisma, filters, userId);
