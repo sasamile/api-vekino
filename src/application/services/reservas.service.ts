@@ -22,6 +22,23 @@ export class ReservasService {
   ) {}
 
   /**
+   * Extrae la fecha/hora local de un string ISO con timezone y la guarda tal cual (sin convertir a UTC)
+   * Esto permite que si envías "2026-01-02T09:00:00-05:00", se guarde como "09:00:00" en lugar de "14:00:00"
+   */
+  private parseLocalDateTime(dateString: string): Date {
+    // Si tiene timezone offset (ej: -05:00, +03:00), extraer la parte de fecha/hora
+    const timezoneMatch = dateString.match(/^(.+?)([+-]\d{2}:\d{2}|Z)$/);
+    if (timezoneMatch) {
+      // Extraer solo la parte de fecha/hora (sin timezone)
+      const localDateTime = timezoneMatch[1];
+      // Crear fecha interpretando la hora como UTC (sin conversión de timezone)
+      return new Date(localDateTime + 'Z');
+    }
+    // Si no tiene timezone, usar directamente
+    return new Date(dateString);
+  }
+
+  /**
    * Crea una nueva reserva
    */
   async createReserva(
@@ -65,11 +82,11 @@ export class ReservasService {
       }
     }
 
-    // Procesar fechas: JavaScript interpreta fechas sin timezone como hora local del servidor
-    // Para evitar problemas, el frontend DEBE enviar fechas con timezone explícito (ej: -05:00 para Colombia)
-    // Si no viene con timezone, JavaScript lo interpretará como hora local y se convertirá a UTC al guardar
-    const fechaInicio = new Date(dto.fechaInicio);
-    const fechaFin = new Date(dto.fechaFin);
+    // Procesar fechas: Extraer la hora local de la fecha recibida y guardarla tal cual (sin convertir a UTC)
+    // Si viene con timezone (ej: "2026-01-02T09:00:00-05:00"), extraemos la fecha/hora local
+    // y la guardamos como si fuera UTC (para mantener la misma hora en la base de datos)
+    const fechaInicio = this.parseLocalDateTime(dto.fechaInicio);
+    const fechaFin = this.parseLocalDateTime(dto.fechaFin);
 
     if (fechaInicio >= fechaFin) {
       throw new BadRequestException('La fecha de fin debe ser posterior a la fecha de inicio');
@@ -270,9 +287,9 @@ export class ReservasService {
       updates.espacioComunId = dto.espacioComunId;
     }
 
-    // Si se cambian las fechas, verificar conflictos
-    const fechaInicio = dto.fechaInicio ? new Date(dto.fechaInicio) : new Date(reserva.fechaInicio);
-    const fechaFin = dto.fechaFin ? new Date(dto.fechaFin) : new Date(reserva.fechaFin);
+    // Si se cambian las fechas, verificar conflictos (usar la misma lógica de parseo que en create)
+    const fechaInicio = dto.fechaInicio ? this.parseLocalDateTime(dto.fechaInicio) : new Date(reserva.fechaInicio);
+    const fechaFin = dto.fechaFin ? this.parseLocalDateTime(dto.fechaFin) : new Date(reserva.fechaFin);
 
     if (dto.fechaInicio !== undefined || dto.fechaFin !== undefined) {
       if (fechaInicio >= fechaFin) {
