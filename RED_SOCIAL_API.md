@@ -86,19 +86,19 @@ files: [archivo1.jpg, archivo2.mp4, archivo3.pdf]
 **Campos del FormData:**
 - `titulo` (string, requerido): Título del post
 - `contenido` (string, requerido): Contenido del post
-- `unidadId` (string, opcional): ID de la unidad asociada
 - `files` (File[], opcional): Archivos multimedia a subir (múltiples archivos permitidos)
+
+**Nota importante:** Los posts son por **usuario**, no por unidad. La unidad del usuario se obtiene automáticamente de su perfil para mostrar información adicional, pero los posts se filtran y muestran por usuario.
 
 **cURL:**
 ```bash
 curl --location 'http://condominio-las-flores-actualizado.localhost:3001/comunicacion/posts' \
---header 'Cookie: better-auth.session_token=288f2b65-0f9e-4932-8865-470a6e6f7cb3.8a3bc97c-b34e-44c1-a2d4-fef6c380eefb' \
---form 'titulo="Evento de Navidad"' \
---form 'contenido="¡Invitamos a todos al evento de Navidad este sábado!"' \
---form 'unidadId="68270f04-8bf4-47ec-88c1-fbc0b4085c55"' \
---form 'files=@"/ruta/a/imagen1.jpg"' \
---form 'files=@"/ruta/a/video1.mp4"' \
---form 'files=@"/ruta/a/documento1.pdf"'
+--header 'Cookie: better-auth.session_token=TU_TOKEN_AQUI' \
+--form 'titulo=Evento de Navidad' \
+--form 'contenido=¡Invitamos a todos al evento de Navidad este sábado!' \
+--form 'files=@/ruta/a/imagen1.jpg' \
+--form 'files=@/ruta/a/video1.mp4' \
+--form 'files=@/ruta/a/documento1.pdf'
 ```
 
 **Ejemplo con JavaScript (Fetch API):**
@@ -106,7 +106,7 @@ curl --location 'http://condominio-las-flores-actualizado.localhost:3001/comunic
 const formData = new FormData();
 formData.append('titulo', 'Evento de Navidad');
 formData.append('contenido', '¡Invitamos a todos al evento de Navidad este sábado!');
-formData.append('unidadId', '68270f04-8bf4-47ec-88c1-fbc0b4085c55');
+// No necesitas enviar unidadId, se obtiene automáticamente del usuario logueado
 
 // Agregar múltiples archivos
 const files = document.getElementById('fileInput').files;
@@ -205,7 +205,7 @@ fetch('http://condominio-las-flores-actualizado.localhost:3001/comunicacion/post
 
 ### 2. Obtener Posts (Lista Paginada)
 
-Obtiene una lista paginada de posts con filtros opcionales. Puedes filtrar para ver tus propios posts o los de otros usuarios.
+Obtiene una lista paginada de posts con filtros opcionales. Funciona como una red social normal: los posts son por usuario, no por unidad.
 
 **Endpoint:** `GET /comunicacion/posts`
 
@@ -213,10 +213,12 @@ Obtiene una lista paginada de posts con filtros opcionales. Puedes filtrar para 
 - `page` (opcional): Número de página (default: 1)
 - `limit` (opcional): Resultados por página (default: 10)
 - `userId` (opcional): Filtrar por ID de usuario específico
-  - Si no se especifica: muestra todos los posts del condominio
-  - Si se especifica tu `userId`: muestra solo tus posts
-  - Si se especifica otro `userId`: muestra solo los posts de ese usuario
+  - Si no se especifica: muestra todos los posts del condominio (feed general)
+  - Si se especifica tu `userId`: muestra solo tus posts (tu perfil)
+  - Si se especifica otro `userId`: muestra solo los posts de ese usuario (su perfil)
 - `activo` (opcional): Filtrar solo posts activos (default: true)
+
+**Nota:** Los posts se muestran por usuario, no por unidad. La información de la unidad se muestra como parte del perfil del usuario que creó el post.
 
 **Ejemplos de uso:**
 

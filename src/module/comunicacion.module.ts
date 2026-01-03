@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { CondominiosService } from '../application/services/condominios.service';
 import { TicketsService } from '../application/services/tickets.service';
 import { PostsService } from '../application/services/posts.service';
@@ -11,8 +11,10 @@ import { PostsRepository } from '../infrastructure/repositories/posts.repository
 import { RoleGuard } from 'src/config/guards/require-role.guard';
 import { ComunicacionController } from 'src/controllers/comunicacion.controller';
 import { CondominiosRepository } from 'src/infrastructure/repositories/condominios.repository';
+import { CondominiosModule } from './condominios.module';
 
 @Module({
+  imports: [forwardRef(() => CondominiosModule)],
   controllers: [ComunicacionController],
   providers: [
     // Application Services

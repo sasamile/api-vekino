@@ -53,7 +53,26 @@ export class PostsRepository {
           FROM "post_reaction" pr
           WHERE pr."postId" = p.id
         ) as "likesCount",
-        ${userLikedSubquery} as "userLiked"
+        ${userLikedSubquery} as "userLiked",
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'id', pa.id,
+                'tipo', pa.tipo,
+                'url', pa.url,
+                'nombre', pa.nombre,
+                'tamaño', pa.tamaño,
+                'mimeType', pa."mimeType",
+                'thumbnailUrl', pa."thumbnailUrl",
+                'createdAt', pa."createdAt"::text
+              )
+            )
+            FROM "post_attachment" pa
+            WHERE pa."postId" = p.id
+          ),
+          '[]'::json
+        ) as attachments
       FROM "post" p
       INNER JOIN "user" u ON p."userId" = u.id
       LEFT JOIN "unidad" un ON p."unidadId" = un.id
@@ -167,7 +186,26 @@ export class PostsRepository {
           FROM "post_reaction" pr
           WHERE pr."postId" = p.id
         ) as "likesCount",
-        ${userLikedSubquery} as "userLiked"
+        ${userLikedSubquery} as "userLiked",
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'id', pa.id,
+                'tipo', pa.tipo,
+                'url', pa.url,
+                'nombre', pa.nombre,
+                'tamaño', pa.tamaño,
+                'mimeType', pa."mimeType",
+                'thumbnailUrl', pa."thumbnailUrl",
+                'createdAt', pa."createdAt"::text
+              )
+            )
+            FROM "post_attachment" pa
+            WHERE pa."postId" = p.id
+          ),
+          '[]'::json
+        ) as attachments
       FROM "post" p
       INNER JOIN "user" u ON p."userId" = u.id
       LEFT JOIN "unidad" un ON p."unidadId" = un.id
@@ -381,6 +419,55 @@ export class PostsRepository {
       DELETE FROM "post_reaction"
       WHERE "postId" = ${postId} AND "userId" = ${userId}
     `;
+  }
+
+  /**
+   * Agrega o actualiza una reacción en un post
+   */
+  async addReaction(prisma: PrismaClient, postId: string, userId: string, tipo: string) {
+    await prisma.$executeRawUnsafe(`
+      INSERT INTO "post_reaction" (id, "postId", "userId", tipo, "createdAt")
+      VALUES (gen_random_uuid(), $1, $2, $3::"TipoReaccion", NOW())
+      ON CONFLICT ("postId", "userId") DO UPDATE SET tipo = $3::"TipoReaccion", "createdAt" = NOW()
+    `, postId, userId, tipo);
+  }
+
+  /**
+   * Elimina una reacción de un post
+   */
+  async removeReaction(prisma: PrismaClient, postId: string, userId: string) {
+    await prisma.$executeRaw`
+      DELETE FROM "post_reaction"
+      WHERE "postId" = ${postId} AND "userId" = ${userId}
+    `;
+  }
+
+  /**
+   * Obtiene la reacción actual del usuario en un post
+   */
+  async getUserReaction(prisma: PrismaClient, postId: string, userId: string) {
+    const result = await prisma.$queryRaw<any[]>`
+      SELECT tipo
+      FROM "post_reaction"
+      WHERE "postId" = ${postId} AND "userId" = ${userId}
+      LIMIT 1
+    `;
+    return result[0]?.tipo || null;
+  }
+
+  /**
+   * Obtiene el conteo de reacciones por tipo para un post
+   */
+  async getReactionsCount(prisma: PrismaClient, postId: string) {
+    const result = await prisma.$queryRaw<any[]>`
+      SELECT 
+        tipo,
+        COUNT(*)::int as count
+      FROM "post_reaction"
+      WHERE "postId" = ${postId}
+      GROUP BY tipo
+    `;
+    return result;
   }
 }
 

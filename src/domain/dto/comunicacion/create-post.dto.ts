@@ -31,11 +31,12 @@ export class CreatePostDto {
   imagen?: string;
 
   @ApiPropertyOptional({
-    description: 'ID de la unidad relacionada',
+    description: 'ID de la unidad relacionada (opcional, se obtiene automáticamente del usuario)',
     example: '550e8400-e29b-41d4-a716-446655440000',
+    deprecated: true,
   })
   @IsString()
   @IsOptional()
-  unidadId?: string;
+  unidadId?: string; // Deprecated: Los posts son por usuario, la unidad se obtiene automáticamente
 }
 

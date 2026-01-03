@@ -132,7 +132,7 @@ export class DatabaseManagerService implements OnModuleDestroy {
           throw error;
         }
       }
-
+      
       // Verificar si las tablas de finanzas existen, si no, crearlas
       try {
         await prisma.$queryRaw`SELECT 1 FROM "factura" LIMIT 1`;

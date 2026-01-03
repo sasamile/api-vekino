@@ -13,6 +13,11 @@ import {
   UseGuards,
   Req,
   BadRequestException,
+  UseInterceptors,
+  UploadedFiles,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,11 +28,14 @@ import {
   ApiQuery,
   ApiBearerAuth,
   ApiCookieAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { Subdomain } from 'src/config/decorators/subdomain.decorator';
 import { CondominiosService } from 'src/application/services/condominios.service';
 import { TicketsService } from 'src/application/services/tickets.service';
 import { PostsService } from 'src/application/services/posts.service';
+import { CondominiosUsersService } from 'src/application/services/condominios-users.service';
 import { RequireCondominioAccess, RequireRole, RoleGuard } from 'src/config/guards/require-role.guard';
 import { CreateTicketDto } from 'src/domain/dto/comunicacion/create-ticket.dto';
 import { UpdateTicketDto } from 'src/domain/dto/comunicacion/update-ticket.dto';
@@ -37,6 +45,7 @@ import { CreatePostDto } from 'src/domain/dto/comunicacion/create-post.dto';
 import { UpdatePostDto } from 'src/domain/dto/comunicacion/update-post.dto';
 import { QueryPostsDto } from 'src/domain/dto/comunicacion/query-posts.dto';
 import { CreatePostCommentDto } from 'src/domain/dto/comunicacion/create-post-comment.dto';
+import { CreateReactionDto } from 'src/domain/dto/comunicacion/create-reaction.dto';
 import { TicketResponseDto } from 'src/domain/dto/comunicacion/ticket-response.dto';
 import { PostResponseDto } from 'src/domain/dto/comunicacion/post-response.dto';
 import { Request } from 'express';
@@ -50,6 +59,7 @@ export class ComunicacionController {
     private readonly condominiosService: CondominiosService,
     private readonly ticketsService: TicketsService,
     private readonly postsService: PostsService,
+    private readonly condominiosUsersService: CondominiosUsersService,
   ) {}
 
   private async getCondominioIdFromSubdomain(
@@ -303,9 +313,11 @@ export class ComunicacionController {
    */
   @Post('posts')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FilesInterceptor('files', 10)) // Máximo 10 archivos
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Crear post en el foro',
-    description: 'Crea un nuevo post en el foro comunitario',
+    description: 'Crea un nuevo post en el foro comunitario con soporte para archivos multimedia',
   })
   @ApiBody({ type: CreatePostDto })
   @ApiBearerAuth('JWT-auth')
@@ -316,13 +328,25 @@ export class ComunicacionController {
     @Subdomain() subdomain: string | null,
     @Body() dto: CreatePostDto,
     @Req() req: Request,
+    @UploadedFiles(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 50 * 1024 * 1024 }), // 50MB
+          new FileTypeValidator({ 
+            fileType: /(jpg|jpeg|png|gif|webp|mp4|avi|mov|webm|mp3|wav|ogg|pdf|doc|docx|xls|xlsx)$/i 
+          }),
+        ],
+      }),
+    )
+    files?: Express.Multer.File[],
   ) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     const user = this.getUserFromRequest(req);
     if (!user) {
       throw new BadRequestException('Usuario no encontrado en la sesión');
     }
-    return this.postsService.createPost(condominioId, user.id, dto);
+    return this.postsService.createPost(condominioId, user.id, dto, files);
   }
 
   /**
@@ -487,7 +511,7 @@ export class ComunicacionController {
   }
 
   /**
-   * Agregar o eliminar like en un post
+   * Agregar o eliminar like en un post (legacy)
    */
   @Post('posts/:id/like')
   @HttpCode(HttpStatus.OK)
@@ -511,6 +535,109 @@ export class ComunicacionController {
       throw new BadRequestException('Usuario no encontrado en la sesión');
     }
     return this.postsService.togglePostLike(condominioId, id, user.id);
+  }
+
+  /**
+   * Agregar o actualizar reacción en un post
+   */
+  @Post('posts/:id/reaction')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Agregar reacción a post',
+    description: 'Agrega o actualiza una reacción (LIKE, LOVE, LAUGH, WOW, SAD, ANGRY) en un post',
+  })
+  @ApiParam({ name: 'id', description: 'ID del post' })
+  @ApiBody({ type: CreateReactionDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Reacción agregada exitosamente' })
+  @ApiResponse({ status: 404, description: 'Post no encontrado' })
+  @ApiResponse({ status: 400, description: 'Tipo de reacción inválido' })
+  async addReaction(
+    @Subdomain() subdomain: string | null,
+    @Param('id') id: string,
+    @Body() dto: CreateReactionDto,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.postsService.addReaction(condominioId, id, user.id, dto.tipo);
+  }
+
+  /**
+   * Eliminar reacción de un post
+   */
+  @Delete('posts/:id/reaction')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Eliminar reacción de post',
+    description: 'Elimina la reacción del usuario actual en un post',
+  })
+  @ApiParam({ name: 'id', description: 'ID del post' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Reacción eliminada exitosamente' })
+  @ApiResponse({ status: 404, description: 'Post no encontrado' })
+  async removeReaction(
+    @Subdomain() subdomain: string | null,
+    @Param('id') id: string,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.postsService.removeReaction(condominioId, id, user.id);
+  }
+
+  /**
+   * Obtener usuarios del condominio (para sidebar)
+   */
+  @Get('usuarios')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener usuarios del condominio',
+    description: 'Obtiene la lista de usuarios del condominio para mostrar en el sidebar',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número de página' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Cantidad de resultados por página' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Búsqueda por nombre o email' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Lista de usuarios' })
+  async getUsuarios(
+    @Subdomain() subdomain: string | null,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const filters = {
+      page: page ? parseInt(String(page), 10) : undefined,
+      limit: limit ? parseInt(String(limit), 10) : undefined,
+      search,
+    };
+    const result = await this.condominiosUsersService.getUsersInCondominio(condominioId, filters);
+    
+    // Formatear respuesta para que sea consistente con el frontend
+    if (Array.isArray(result)) {
+      return {
+        data: result.map((user: any) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+          role: user.role,
+        })),
+        total: result.length,
+      };
+    }
+    
+    return result;
   }
 }
 
