@@ -8,10 +8,17 @@ export class PostsRepository {
    */
   async findById(prisma: PrismaClient, id: string, userId?: string) {
     const params: any[] = [id];
+    let userReactionSubquery = 'NULL';
     let userLikedSubquery = '0';
     
     if (userId) {
       params.push(userId);
+      userReactionSubquery = `(
+        SELECT tipo
+        FROM "post_reaction" pr
+        WHERE pr."postId" = p.id AND pr."userId"::text = $2::text
+        LIMIT 1
+      )`;
       userLikedSubquery = `(
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END::int
         FROM "post_reaction" pr
@@ -54,6 +61,24 @@ export class PostsRepository {
           WHERE pr."postId" = p.id
         ) as "likesCount",
         ${userLikedSubquery} as "userLiked",
+        ${userReactionSubquery} as "userReaction",
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'tipo', pr2.tipo,
+                'count', pr2.count
+              )
+            )
+            FROM (
+              SELECT tipo, COUNT(*)::int as count
+              FROM "post_reaction" pr2
+              WHERE pr2."postId" = p.id
+              GROUP BY tipo
+            ) pr2
+          ),
+          '[]'::json
+        ) as "reactionsCount",
         COALESCE(
           (
             SELECT json_agg(
@@ -137,6 +162,7 @@ export class PostsRepository {
     const limitParam = paramIndex;
     const offsetParam = paramIndex + 1;
     const userIdParam = paramIndex + 2;
+    let userReactionSubquery = 'NULL';
     let userLikedSubquery = '0';
     let queryParams = [...params];
     
@@ -145,6 +171,12 @@ export class PostsRepository {
     
     if (currentUserId) {
       queryParams.push(currentUserId);
+      userReactionSubquery = `(
+        SELECT tipo
+        FROM "post_reaction" pr
+        WHERE pr."postId" = p.id AND pr."userId"::text = $${userIdParam}::text
+        LIMIT 1
+      )`;
       userLikedSubquery = `(
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END::int
         FROM "post_reaction" pr
@@ -187,6 +219,24 @@ export class PostsRepository {
           WHERE pr."postId" = p.id
         ) as "likesCount",
         ${userLikedSubquery} as "userLiked",
+        ${userReactionSubquery} as "userReaction",
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'tipo', pr2.tipo,
+                'count', pr2.count
+              )
+            )
+            FROM (
+              SELECT tipo, COUNT(*)::int as count
+              FROM "post_reaction" pr2
+              WHERE pr2."postId" = p.id
+              GROUP BY tipo
+            ) pr2
+          ),
+          '[]'::json
+        ) as "reactionsCount",
         COALESCE(
           (
             SELECT json_agg(
