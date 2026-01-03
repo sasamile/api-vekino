@@ -36,6 +36,7 @@ import { CondominiosService } from 'src/application/services/condominios.service
 import { TicketsService } from 'src/application/services/tickets.service';
 import { PostsService } from 'src/application/services/posts.service';
 import { CondominiosUsersService } from 'src/application/services/condominios-users.service';
+import { ChatService } from 'src/application/services/chat.service';
 import { RequireCondominioAccess, RequireRole, RoleGuard } from 'src/config/guards/require-role.guard';
 import { CreateTicketDto } from 'src/domain/dto/comunicacion/create-ticket.dto';
 import { UpdateTicketDto } from 'src/domain/dto/comunicacion/update-ticket.dto';
@@ -46,6 +47,8 @@ import { UpdatePostDto } from 'src/domain/dto/comunicacion/update-post.dto';
 import { QueryPostsDto } from 'src/domain/dto/comunicacion/query-posts.dto';
 import { CreatePostCommentDto } from 'src/domain/dto/comunicacion/create-post-comment.dto';
 import { CreateReactionDto } from 'src/domain/dto/comunicacion/create-reaction.dto';
+import { CreateChatMessageDto } from 'src/domain/dto/comunicacion/create-chat-message.dto';
+import { QueryChatDto } from 'src/domain/dto/comunicacion/query-chat.dto';
 import { TicketResponseDto } from 'src/domain/dto/comunicacion/ticket-response.dto';
 import { PostResponseDto } from 'src/domain/dto/comunicacion/post-response.dto';
 import { Request } from 'express';
@@ -60,6 +63,7 @@ export class ComunicacionController {
     private readonly ticketsService: TicketsService,
     private readonly postsService: PostsService,
     private readonly condominiosUsersService: CondominiosUsersService,
+    private readonly chatService: ChatService,
   ) {}
 
   private async getCondominioIdFromSubdomain(
@@ -638,6 +642,180 @@ export class ComunicacionController {
     }
     
     return result;
+  }
+
+  /**
+   * Obtener posts de un usuario específico
+   */
+  @Get('posts/usuario/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener posts de un usuario',
+    description: 'Obtiene todos los posts publicados por un usuario específico',
+  })
+  @ApiParam({ name: 'userId', description: 'ID del usuario' })
+  @ApiQuery({ type: QueryPostsDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Lista de posts del usuario', type: [PostResponseDto] })
+  async getPostsByUser(
+    @Subdomain() subdomain: string | null,
+    @Param('userId') userId: string,
+    @Query() query: QueryPostsDto,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    
+    // Usar el userId del parámetro en lugar del query
+    const queryWithUserId = { ...query, userId };
+    
+    return this.postsService.findAllPosts(condominioId, queryWithUserId, user?.id);
+  }
+
+  // ========== CHAT ENTRE USUARIOS ==========
+
+  /**
+   * Crear mensaje de chat
+   */
+  @Post('chat/mensajes')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FilesInterceptor('files', 10))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Crear mensaje de chat',
+    description: 'Envía un mensaje a otro usuario con soporte para archivos multimedia',
+  })
+  @ApiBody({ type: CreateChatMessageDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 201, description: 'Mensaje creado exitosamente' })
+  @ApiResponse({ status: 404, description: 'Usuario destinatario no encontrado' })
+  async createChatMessage(
+    @Subdomain() subdomain: string | null,
+    @Body() dto: CreateChatMessageDto,
+    @Req() req: Request,
+    @UploadedFiles(
+      new ParseFilePipe({
+        fileIsRequired: false,
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 50 * 1024 * 1024 }),
+          new FileTypeValidator({ 
+            fileType: /(jpg|jpeg|png|gif|webp|mp4|avi|mov|webm|mp3|wav|ogg|pdf|doc|docx|xls|xlsx)$/i 
+          }),
+        ],
+      }),
+    )
+    files?: Express.Multer.File[],
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.chatService.createMessage(condominioId, user.id, dto, files);
+  }
+
+  /**
+   * Obtener conversaciones del usuario
+   */
+  @Get('chat/conversaciones')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener conversaciones',
+    description: 'Obtiene la lista de usuarios con quien el usuario actual ha chateado',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Lista de conversaciones' })
+  async getConversations(
+    @Subdomain() subdomain: string | null,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.chatService.getConversations(condominioId, user.id);
+  }
+
+  /**
+   * Obtener mensajes entre dos usuarios
+   */
+  @Get('chat/mensajes/:userId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener mensajes con un usuario',
+    description: 'Obtiene los mensajes entre el usuario actual y otro usuario específico',
+  })
+  @ApiParam({ name: 'userId', description: 'ID del otro usuario' })
+  @ApiQuery({ type: QueryChatDto })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Lista de mensajes' })
+  async getMessages(
+    @Subdomain() subdomain: string | null,
+    @Param('userId') userId: string,
+    @Query() query: QueryChatDto,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.chatService.getMessages(condominioId, user.id, userId, query);
+  }
+
+  /**
+   * Marcar mensajes como leídos
+   */
+  @Post('chat/mensajes/:userId/leer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Marcar mensajes como leídos',
+    description: 'Marca todos los mensajes de un usuario como leídos',
+  })
+  @ApiParam({ name: 'userId', description: 'ID del usuario remitente' })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Mensajes marcados como leídos' })
+  async markMessagesAsRead(
+    @Subdomain() subdomain: string | null,
+    @Param('userId') userId: string,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.chatService.markAsRead(condominioId, user.id, userId);
+  }
+
+  /**
+   * Obtener conteo de mensajes no leídos
+   */
+  @Get('chat/mensajes-no-leidos')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener conteo de mensajes no leídos',
+    description: 'Obtiene el número total de mensajes no leídos del usuario actual',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({ status: 200, description: 'Conteo de mensajes no leídos' })
+  async getUnreadCount(
+    @Subdomain() subdomain: string | null,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado en la sesión');
+    }
+    return this.chatService.getUnreadCount(condominioId, user.id);
   }
 }
 
