@@ -15,7 +15,7 @@ export class PostsRepository {
       userLikedSubquery = `(
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END::int
         FROM "post_reaction" pr
-        WHERE pr."postId" = p.id AND pr."userId" = $2
+        WHERE pr."postId" = p.id AND pr."userId"::text = $2::text
       )`;
     }
 
@@ -57,7 +57,7 @@ export class PostsRepository {
       FROM "post" p
       INNER JOIN "user" u ON p."userId" = u.id
       LEFT JOIN "unidad" un ON p."unidadId" = un.id
-      WHERE p.id = $1
+      WHERE p.id::text = $1::text
       LIMIT 1
     `;
 
@@ -87,7 +87,7 @@ export class PostsRepository {
     let paramIndex = 1;
 
     if (filters.userId) {
-      condiciones.push(`p."userId" = $${paramIndex}`);
+      condiciones.push(`p."userId"::text = $${paramIndex}::text`);
       params.push(filters.userId);
       paramIndex++;
     }
@@ -117,15 +117,19 @@ export class PostsRepository {
     // Obtener datos
     const limitParam = paramIndex;
     const offsetParam = paramIndex + 1;
+    const userIdParam = paramIndex + 2;
     let userLikedSubquery = '0';
-    let queryParams = [...params, limit, skip];
+    let queryParams = [...params];
+    
+    // Agregar limit y skip con cast explícito
+    queryParams.push(limit, skip);
     
     if (currentUserId) {
       queryParams.push(currentUserId);
       userLikedSubquery = `(
         SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END::int
         FROM "post_reaction" pr
-        WHERE pr."postId" = p.id AND pr."userId" = $${paramIndex + 3}
+        WHERE pr."postId" = p.id AND pr."userId"::text = $${userIdParam}::text
       )`;
     }
 

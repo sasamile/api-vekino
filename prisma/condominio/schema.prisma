@@ -41,9 +41,7 @@ model User {
   ticketComments   TicketComment[]
   posts            Post[]
   postComments     PostComment[]
-  postReactions    PostReaction[]
-  chatMessagesSent     ChatMessage[] @relation("ChatMessagesSent")
-  chatMessagesReceived ChatMessage[] @relation("ChatMessagesReceived")
+  postLikes        PostLike[]
 
   @@unique([email])
   @@unique([numeroDocumento])
@@ -364,12 +362,12 @@ model Post {
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   unidadId          String?         // Unidad del usuario que creó el post (opcional, para mostrar "Casa 89")
   unidad            Unidad?         @relation(fields: [unidadId], references: [id], onDelete: SetNull)
+  imagen            String?         // URL de imagen adjunta (opcional)
   activo            Boolean         @default(true) // Si está activo o eliminado
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   comments          PostComment[]   // Comentarios del post
-  reactions         PostReaction[]  // Reacciones del post
-  attachments       PostAttachment[] // Archivos adjuntos (imágenes, videos, audio, documentos)
+  likes             PostLike[]      // Likes del post
 
   @@index([userId])
   @@index([unidadId])
@@ -396,91 +394,18 @@ model PostComment {
   @@map("post_comment")
 }
 
-// Reacciones en posts del foro (me gusta, amor, risa, sorpresa, tristeza, enojo)
-enum TipoReaccion {
-  LIKE      // 👍
-  LOVE      // ❤️
-  LAUGH     // 😂
-  WOW       // 😮
-  SAD       // 😢
-  ANGRY     // 😠
-}
-
-model PostReaction {
+// Likes en posts del foro
+model PostLike {
   id                String          @id @default(uuid())
   postId            String
   post              Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
   userId            String
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tipo              TipoReaccion   @default(LIKE)
   createdAt         DateTime        @default(now())
 
-  @@unique([postId, userId]) // Un usuario solo puede tener una reacción por post (puede cambiarla)
+  @@unique([postId, userId]) // Un usuario solo puede dar like una vez por post
   @@index([postId])
   @@index([userId])
-  @@index([tipo])
-  @@map("post_reaction")
-}
-
-// Archivos adjuntos en posts (imágenes, videos, audio, documentos)
-enum TipoArchivo {
-  IMAGEN
-  VIDEO
-  AUDIO
-  DOCUMENTO
-}
-
-model PostAttachment {
-  id                String          @id @default(uuid())
-  postId            String
-  post              Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
-  tipo              TipoArchivo     // Tipo de archivo
-  url               String          // URL del archivo almacenado
-  nombre            String?         // Nombre original del archivo
-  tamaño            Int?            // Tamaño en bytes
-  mimeType          String?         // Tipo MIME del archivo
-  thumbnailUrl      String?         // URL del thumbnail (para videos)
-  createdAt         DateTime        @default(now())
-
-  @@index([postId])
-  @@index([tipo])
-  @@map("post_attachment")
-}
-
-// Mensajes de chat entre usuarios
-model ChatMessage {
-  id                String          @id @default(uuid())
-  remitenteId       String          // Usuario que envía el mensaje
-  remitente         User            @relation("ChatMessagesSent", fields: [remitenteId], references: [id], onDelete: Cascade)
-  destinatarioId    String          // Usuario que recibe el mensaje
-  destinatario      User            @relation("ChatMessagesReceived", fields: [destinatarioId], references: [id], onDelete: Cascade)
-  contenido         String          // Contenido del mensaje
-  leido             Boolean         @default(false) // Si el mensaje fue leído
-  leidoAt           DateTime?       // Fecha en que se leyó el mensaje
-  createdAt         DateTime        @default(now())
-  attachments       ChatAttachment[] // Archivos adjuntos en el mensaje
-
-  @@index([remitenteId])
-  @@index([destinatarioId])
-  @@index([leido])
-  @@index([createdAt])
-  @@map("chat_message")
-}
-
-// Archivos adjuntos en mensajes de chat
-model ChatAttachment {
-  id                String          @id @default(uuid())
-  mensajeId         String
-  mensaje           ChatMessage     @relation(fields: [mensajeId], references: [id], onDelete: Cascade)
-  tipo              TipoArchivo     // Tipo de archivo
-  url               String          // URL del archivo almacenado
-  nombre            String?         // Nombre original del archivo
-  tamaño            Int?            // Tamaño en bytes
-  mimeType          String?         // Tipo MIME del archivo
-  createdAt         DateTime        @default(now())
-
-  @@index([mensajeId])
-  @@index([tipo])
-  @@map("chat_attachment")
+  @@map("post_like")
 }
 

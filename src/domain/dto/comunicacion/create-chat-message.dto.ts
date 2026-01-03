@@ -25,3 +25,5 @@ export class CreateChatMessageDto {
   attachments?: AttachmentDto[];
 }
 
+
+

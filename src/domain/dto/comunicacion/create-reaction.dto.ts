@@ -20,3 +20,5 @@ export class CreateReactionDto {
   tipo: TipoReaccion;
 }
 
+
+
