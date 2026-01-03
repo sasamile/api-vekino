@@ -8,13 +8,13 @@ export class PostsRepository {
    */
   async findById(prisma: PrismaClient, id: string, userId?: string) {
     const params: any[] = [id];
-    let userReactionSubquery = 'NULL';
+    let userReactionSubquery = 'NULL::text';
     let userLikedSubquery = '0';
     
     if (userId) {
       params.push(userId);
       userReactionSubquery = `(
-        SELECT tipo
+        SELECT tipo::text
         FROM "post_reaction" pr
         WHERE pr."postId" = p.id AND pr."userId"::text = $2::text
         LIMIT 1
@@ -66,7 +66,7 @@ export class PostsRepository {
           (
             SELECT json_agg(
               json_build_object(
-                'tipo', pr2.tipo,
+                'tipo', pr2.tipo::text,
                 'count', pr2.count
               )
             )
@@ -162,7 +162,7 @@ export class PostsRepository {
     const limitParam = paramIndex;
     const offsetParam = paramIndex + 1;
     const userIdParam = paramIndex + 2;
-    let userReactionSubquery = 'NULL';
+    let userReactionSubquery = 'NULL::text';
     let userLikedSubquery = '0';
     let queryParams = [...params];
     
@@ -172,7 +172,7 @@ export class PostsRepository {
     if (currentUserId) {
       queryParams.push(currentUserId);
       userReactionSubquery = `(
-        SELECT tipo
+        SELECT tipo::text
         FROM "post_reaction" pr
         WHERE pr."postId" = p.id AND pr."userId"::text = $${userIdParam}::text
         LIMIT 1
@@ -224,7 +224,7 @@ export class PostsRepository {
           (
             SELECT json_agg(
               json_build_object(
-                'tipo', pr2.tipo,
+                'tipo', pr2.tipo::text,
                 'count', pr2.count
               )
             )
