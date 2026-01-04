@@ -139,14 +139,14 @@ export class FinanzasController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Listar facturas',
-    description: 'Obtiene todas las facturas con filtros. Los usuarios solo ven sus propias facturas.',
+    description: 'Obtiene todas las facturas con filtros. Los usuarios solo ven sus propias facturas. El estado se calcula dinámicamente basado en la fecha de vencimiento.',
   })
   @ApiQuery({ type: QueryFacturasDto })
   @ApiBearerAuth('JWT-auth')
   @ApiCookieAuth('better-auth.session_token')
   @ApiResponse({
     status: 200,
-    description: 'Lista de facturas',
+    description: 'Lista de facturas con estados actualizados automáticamente',
   })
   async getFacturas(
     @Subdomain() subdomain: string | null,
@@ -157,6 +157,61 @@ export class FinanzasController {
     const user = this.getUserFromRequest(req);
     const isAdmin = user ? this.isAdmin(user.role) : false;
     return this.finanzasService.getFacturas(condominioId, query, user?.id, isAdmin);
+  }
+
+  /**
+   * Obtener resumen de pagos del usuario actual (para usuarios/propietarios)
+   */
+  @Get('mis-pagos')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Obtener mis pagos',
+    description: 'Obtiene el resumen completo de pagos del usuario actual, incluyendo estadísticas (pendientes, vencidas, pagadas) y próxima factura a vencer. El estado se calcula dinámicamente.',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Resumen de pagos del usuario con información precisa y actualizada',
+    schema: {
+      example: {
+        resumen: {
+          pendientes: { cantidad: 1, valor: 140000 },
+          vencidas: { cantidad: 0, valor: 0 },
+          pagadas: { cantidad: 0, valor: 0 },
+          proximoVencimiento: {
+            numeroFactura: 'FAC-2025-12-0001',
+            fechaVencimiento: '2026-01-02T00:00:00.000Z',
+            valor: 140000,
+            estado: 'VENCIDA',
+          },
+        },
+        facturas: [
+          {
+            id: '...',
+            numeroFactura: 'FAC-2025-12-0001',
+            estado: 'VENCIDA',
+            valor: 140000,
+            fechaVencimiento: '2026-01-02T00:00:00.000Z',
+            puedePagar: true,
+          },
+        ],
+        total: 1,
+      },
+    },
+  })
+  async getMisPagos(
+    @Subdomain() subdomain: string | null,
+    @Req() req: Request,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    const user = this.getUserFromRequest(req);
+    
+    if (!user?.id) {
+      throw new BadRequestException('Usuario no autenticado');
+    }
+
+    return this.finanzasService.getMisPagos(condominioId, user.id);
   }
 
   /**

@@ -4,7 +4,7 @@ import { PrismaClient } from 'generated/prisma/client';
 @Injectable()
 export class FinanzasRepository {
   /**
-   * Busca una factura por ID con relaciones
+   * Busca una factura por ID con relaciones y estado calculado dinámicamente
    */
   async findFacturaById(prisma: PrismaClient, id: string) {
     const facturas = await prisma.$queryRaw<any[]>`
@@ -18,7 +18,11 @@ export class FinanzasRepository {
         f."fechaVencimiento"::text as "fechaVencimiento",
         f.valor,
         f.descripcion,
-        f.estado,
+        CASE
+          WHEN f.estado = 'PAGADA' THEN 'PAGADA'::"EstadoFactura"
+          WHEN f."fechaVencimiento" < CURRENT_DATE AND f.estado != 'PAGADA' THEN 'VENCIDA'::"EstadoFactura"
+          ELSE f.estado
+        END as "estado",
         f."fechaEnvio"::text as "fechaEnvio",
         f."fechaPago"::text as "fechaPago",
         f.observaciones,
@@ -37,7 +41,11 @@ export class FinanzasRepository {
             'email', us.email
           )
           ELSE NULL
-        END as "user"
+        END as "user",
+        CASE
+          WHEN f."fechaVencimiento" < CURRENT_DATE AND f.estado != 'PAGADA' THEN true
+          ELSE false
+        END as "estaVencida"
       FROM "factura" f
       INNER JOIN "unidad" u ON f."unidadId" = u.id
       LEFT JOIN "user" us ON f."userId" = us.id
@@ -90,7 +98,14 @@ export class FinanzasRepository {
     }
 
     if (filters.estado) {
-      condiciones.push(`f.estado = $${paramIndex}::"EstadoFactura"`);
+      // Para filtrar por estado, usar el estado calculado dinámicamente
+      condiciones.push(`(
+        CASE
+          WHEN f.estado = 'PAGADA' THEN 'PAGADA'::"EstadoFactura"
+          WHEN f."fechaVencimiento" < CURRENT_DATE AND f.estado != 'PAGADA' THEN 'VENCIDA'::"EstadoFactura"
+          ELSE f.estado
+        END
+      ) = $${paramIndex}::"EstadoFactura"`);
       params.push(filters.estado);
       paramIndex++;
     }
@@ -118,7 +133,7 @@ export class FinanzasRepository {
     const countResult = await prisma.$queryRawUnsafe<any[]>(countQuery, ...params);
     const total = parseInt(countResult[0]?.total || '0', 10);
 
-    // Obtener datos
+    // Obtener datos con estado calculado dinámicamente
     const limitParam = paramIndex;
     const offsetParam = paramIndex + 1;
     const dataQuery = `
@@ -132,7 +147,11 @@ export class FinanzasRepository {
         f."fechaVencimiento"::text as "fechaVencimiento",
         f.valor,
         f.descripcion,
-        f.estado,
+        CASE
+          WHEN f.estado = 'PAGADA' THEN 'PAGADA'::"EstadoFactura"
+          WHEN f."fechaVencimiento" < CURRENT_DATE AND f.estado != 'PAGADA' THEN 'VENCIDA'::"EstadoFactura"
+          ELSE f.estado
+        END as "estado",
         f."fechaEnvio"::text as "fechaEnvio",
         f."fechaPago"::text as "fechaPago",
         f.observaciones,
@@ -151,7 +170,11 @@ export class FinanzasRepository {
             'email', us.email
           )
           ELSE NULL
-        END as "user"
+        END as "user",
+        CASE
+          WHEN f."fechaVencimiento" < CURRENT_DATE AND f.estado != 'PAGADA' THEN true
+          ELSE false
+        END as "estaVencida"
       FROM "factura" f
       INNER JOIN "unidad" u ON f."unidadId" = u.id
       LEFT JOIN "user" us ON f."userId" = us.id

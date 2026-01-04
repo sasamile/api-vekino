@@ -246,6 +246,24 @@ export class FinanzasService {
   }
 
   /**
+   * Actualiza automáticamente el estado de facturas vencidas
+   */
+  private async updateVencidasFacturas(condominioPrisma: any): Promise<void> {
+    try {
+      await condominioPrisma.$executeRaw`
+        UPDATE "factura"
+        SET estado = 'VENCIDA'::"EstadoFactura", "updatedAt" = NOW()
+        WHERE estado != 'PAGADA'
+          AND estado != 'VENCIDA'
+          AND "fechaVencimiento" < CURRENT_DATE
+      `;
+    } catch (error) {
+      console.error('Error actualizando facturas vencidas:', error);
+      // No lanzar error, solo loguear
+    }
+  }
+
+  /**
    * Obtiene todas las facturas con filtros
    */
   async getFacturas(
@@ -258,6 +276,9 @@ export class FinanzasService {
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Actualizar facturas vencidas automáticamente
+    await this.updateVencidasFacturas(condominioPrisma);
 
     const filterParams: any = {
       page: filters.page,
@@ -282,9 +303,13 @@ export class FinanzasService {
    * Obtiene una factura por ID
    */
   async getFactura(condominioId: string, facturaId: string, userId?: string, isAdmin: boolean = false) {
+    await this.ensureFinanzasTables(condominioId);
     await this.condominiosService.findOne(condominioId);
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Actualizar facturas vencidas automáticamente
+    await this.updateVencidasFacturas(condominioPrisma);
 
     const factura = await this.finanzasRepository.findFacturaById(condominioPrisma, facturaId);
     if (!factura) {
@@ -297,6 +322,72 @@ export class FinanzasService {
     }
 
     return factura;
+  }
+
+  /**
+   * Obtiene el resumen de pagos del usuario actual (para usuarios/propietarios)
+   */
+  async getMisPagos(condominioId: string, userId: string) {
+    await this.ensureFinanzasTables(condominioId);
+    await this.condominiosService.findOne(condominioId);
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Actualizar facturas vencidas automáticamente
+    await this.updateVencidasFacturas(condominioPrisma);
+
+    // Obtener todas las facturas del usuario
+    const facturas = await this.finanzasRepository.findAllFacturas(condominioPrisma, {
+      userId,
+      limit: 1000, // Obtener todas
+    });
+
+    // Calcular estadísticas
+    const facturasData = facturas.data || [];
+    const pendientes = facturasData.filter((f: any) => f.estado === 'PENDIENTE' || f.estado === 'ENVIADA');
+    const vencidas = facturasData.filter((f: any) => f.estado === 'VENCIDA');
+    const pagadas = facturasData.filter((f: any) => f.estado === 'PAGADA');
+
+    const valorPendientes = pendientes.reduce((sum: number, f: any) => sum + parseFloat(f.valor || 0), 0);
+    const valorVencidas = vencidas.reduce((sum: number, f: any) => sum + parseFloat(f.valor || 0), 0);
+    const valorPagadas = pagadas.reduce((sum: number, f: any) => sum + parseFloat(f.valor || 0), 0);
+
+    // Obtener próxima factura a vencer
+    const proximaVencimiento = facturasData
+      .filter((f: any) => f.estado !== 'PAGADA')
+      .sort((a: any, b: any) => {
+        const fechaA = new Date(a.fechaVencimiento).getTime();
+        const fechaB = new Date(b.fechaVencimiento).getTime();
+        return fechaA - fechaB;
+      })[0] || null;
+
+    return {
+      resumen: {
+        pendientes: {
+          cantidad: pendientes.length,
+          valor: valorPendientes,
+        },
+        vencidas: {
+          cantidad: vencidas.length,
+          valor: valorVencidas,
+        },
+        pagadas: {
+          cantidad: pagadas.length,
+          valor: valorPagadas,
+        },
+        proximoVencimiento: proximaVencimiento ? {
+          numeroFactura: proximaVencimiento.numeroFactura,
+          fechaVencimiento: proximaVencimiento.fechaVencimiento,
+          valor: proximaVencimiento.valor,
+          estado: proximaVencimiento.estado,
+        } : null,
+      },
+      facturas: facturasData.map((f: any) => ({
+        ...f,
+        puedePagar: f.estado !== 'PAGADA' && f.estado !== 'CANCELADA',
+      })),
+      total: facturas.total,
+    };
   }
 
   /**
