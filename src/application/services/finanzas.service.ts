@@ -743,16 +743,54 @@ export class FinanzasService {
     const condominioPrisma =
       await this.condominiosService.getPrismaClientForCondominio(condominioId);
 
-    // Primero intentar buscar el pago por transaction ID
+    console.log(`🔍 Buscando pago con transaction ID: ${wompiTransactionId}`);
+
+    // Primero consultar directamente en Wompi para obtener información de la transacción
+    let wompiStatus;
+    let reference: string | null = null;
+    
+    try {
+      console.log(`📡 Consultando transacción en Wompi: ${wompiTransactionId}`);
+      wompiStatus = await this.wompiService.getTransactionStatus(wompiTransactionId);
+      reference = wompiStatus.data.reference || null;
+      console.log(`✅ Transacción encontrada en Wompi. Referencia: ${reference}, Estado: ${wompiStatus.data.status}`);
+    } catch (error: any) {
+      console.error(`❌ Error al consultar transacción en Wompi:`, error.message);
+      throw new NotFoundException(
+        `No se pudo encontrar la transacción ${wompiTransactionId} en Wompi. Verifica que el transaction ID sea correcto.`,
+      );
+    }
+
+    // Buscar el pago por transaction ID
     let pago = await this.finanzasRepository.findPagoByWompiTransactionId(
       condominioPrisma,
       wompiTransactionId,
     );
 
-    // Si no se encuentra por transaction ID, buscar pagos en estado PROCESANDO o PENDIENTE
-    // y verificar si alguno corresponde a esta transacción
+    if (pago) {
+      console.log(`✅ Pago encontrado por transaction ID: ${pago.id}`);
+    } else {
+      console.log(`⚠️ Pago no encontrado por transaction ID, buscando por referencia: ${reference}`);
+      
+      // Si no se encuentra por transaction ID, buscar por referencia
+      if (reference) {
+        pago = await this.finanzasRepository.findPagoByWompiReference(
+          condominioPrisma,
+          reference,
+        );
+        
+        if (pago) {
+          console.log(`✅ Pago encontrado por referencia: ${pago.id}`);
+        }
+      }
+    }
+
+    // Si aún no se encuentra, buscar en todos los pagos recientes y comparar
     if (!pago) {
-      const pagosPendientes = await condominioPrisma.$queryRaw<any[]>`
+      console.log(`⚠️ Pago no encontrado por referencia, buscando en pagos recientes...`);
+      
+      // Buscar todos los pagos recientes (últimas 48 horas) que puedan corresponder
+      const pagosRecientes = await condominioPrisma.$queryRaw<any[]>`
         SELECT 
           p.id,
           p."facturaId",
@@ -769,45 +807,84 @@ export class FinanzasService {
           p."createdAt"::text as "createdAt",
           p."updatedAt"::text as "updatedAt"
         FROM "pago" p
-        WHERE p.estado IN ('PENDIENTE'::"EstadoPago", 'PROCESANDO'::"EstadoPago")
-          AND (p."wompiTransactionId" IS NULL OR p."wompiTransactionId" = '')
+        WHERE p."createdAt" > NOW() - INTERVAL '48 hours'
+          AND p."metodoPago" = 'WOMPI'::"MetodoPago"
+          AND (p."wompiTransactionId" IS NULL OR p."wompiTransactionId" = '' OR p.estado IN ('PENDIENTE'::"EstadoPago", 'PROCESANDO'::"EstadoPago"))
         ORDER BY p."createdAt" DESC
-        LIMIT 10
+        LIMIT 100
       `;
 
-      // Consultar el estado de la transacción en Wompi para obtener la referencia
-      try {
-        const wompiStatus = await this.wompiService.getTransactionStatus(wompiTransactionId);
-        const reference = wompiStatus.data.reference;
+      console.log(`📋 Encontrados ${pagosRecientes.length} pagos recientes para comparar`);
 
-        if (reference) {
-          // Buscar por referencia
-          pago = await this.finanzasRepository.findPagoByWompiReference(
-            condominioPrisma,
-            reference,
-          );
+      // Comparar el valor y otros datos para encontrar coincidencias
+      const valorEnCentavos = wompiStatus.data.amount_in_cents / 100;
+      const valorEnPesos = parseFloat(valorEnCentavos.toFixed(2));
+      
+      console.log(`💰 Valor de Wompi: ${valorEnPesos} COP`);
+      
+      for (const pagoReciente of pagosRecientes) {
+        const valorPago = parseFloat(pagoReciente.valor || 0);
+        console.log(`  - Pago ${pagoReciente.id}: Valor=${valorPago}, Estado=${pagoReciente.estado}, TransactionID=${pagoReciente.wompiTransactionId || 'N/A'}, Reference=${pagoReciente.wompiReference || 'N/A'}`);
+        
+        // Si el valor coincide exactamente (o con diferencia mínima por redondeo)
+        const diferenciaValor = Math.abs(valorPago - valorEnPesos);
+        if (diferenciaValor < 1.0) { // Permitir diferencia de hasta 1 peso por redondeo
+          console.log(`🎯 Coincidencia por valor encontrada: Pago ${pagoReciente.id} (diferencia: ${diferenciaValor})`);
+          
+          // Si no tiene transaction ID o está en estado pendiente/procesando, es muy probable que sea este
+          if (!pagoReciente.wompiTransactionId || 
+              pagoReciente.estado === 'PENDIENTE' || 
+              pagoReciente.estado === 'PROCESANDO') {
+            console.log(`✅ Pago candidato confirmado: ${pagoReciente.id}`);
+            pago = pagoReciente;
+            break;
+          }
         }
-      } catch (error) {
-        console.error('Error al consultar transacción en Wompi:', error);
+        
+        // También verificar si la referencia coincide parcialmente (a veces Wompi cambia el formato)
+        if (reference && pagoReciente.wompiReference) {
+          // Comparar partes de la referencia
+          const refParts = reference.split('_');
+          const pagoRefParts = pagoReciente.wompiReference.split('_');
+          
+          // Si tienen partes comunes y el valor coincide
+          if (refParts.length > 0 && pagoRefParts.length > 0) {
+            const tieneParteComun = refParts.some(part => pagoRefParts.includes(part));
+            if (tieneParteComun && diferenciaValor < 1.0) {
+              console.log(`🎯 Coincidencia por referencia parcial y valor: Pago ${pagoReciente.id}`);
+              pago = pagoReciente;
+              break;
+            }
+          }
+        }
       }
     }
 
     if (!pago) {
+      console.error(`❌ No se pudo encontrar el pago en la base de datos`);
+      console.error(`   Transaction ID: ${wompiTransactionId}`);
+      console.error(`   Referencia Wompi: ${reference}`);
+      console.error(`   Estado Wompi: ${wompiStatus.data.status}`);
+      console.error(`   Valor: ${wompiStatus.data.amount_in_cents / 100}`);
+      
       throw new NotFoundException(
-        `No se pudo encontrar información sobre este pago. Por favor verifica en tu historial de pagos.`,
+        `No se pudo encontrar información sobre este pago en la base de datos. Transaction ID: ${wompiTransactionId}, Referencia: ${reference || 'N/A'}. Por favor verifica en tu historial de pagos o contacta al administrador.`,
       );
     }
 
     // Si el pago no tiene transaction ID guardado, actualizarlo primero
-    if (!pago.wompiTransactionId) {
+    if (!pago.wompiTransactionId || pago.wompiTransactionId !== wompiTransactionId) {
+      console.log(`📝 Actualizando transaction ID del pago ${pago.id}`);
       await this.finanzasRepository.updatePago(condominioPrisma, pago.id, {
         wompiTransactionId: wompiTransactionId,
+        wompiResponse: JSON.stringify(wompiStatus),
       });
       // Obtener el pago actualizado
       pago = await this.finanzasRepository.findPagoById(condominioPrisma, pago.id);
     }
 
     // Consultar estado en Wompi y actualizar
+    console.log(`🔄 Verificando y actualizando estado del pago...`);
     return this.verificarYActualizarEstadoPago(condominioPrisma, pago);
   }
 
