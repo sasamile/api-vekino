@@ -355,37 +355,8 @@ export class FinanzasController {
   }
 
   /**
-   * Consultar estado de un pago
-   */
-  @Get('pagos/:id/estado')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Consultar estado de pago',
-    description: 'Consulta el estado de un pago, incluyendo el estado en Wompi si aplica. Actualiza automáticamente el estado si cambió en Wompi.',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'ID del pago',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
-  @ApiBearerAuth('JWT-auth')
-  @ApiCookieAuth('better-auth.session_token')
-  @ApiResponse({
-    status: 200,
-    description: 'Estado del pago actualizado',
-    type: PagoResponseDto,
-  })
-  @ApiResponse({ status: 404, description: 'Pago no encontrado' })
-  async consultarEstadoPago(
-    @Subdomain() subdomain: string | null,
-    @Param('id') id: string,
-  ) {
-    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
-    return this.finanzasService.consultarEstadoPago(condominioId, id);
-  }
-
-  /**
    * Verificar estado de pago por transaction ID de Wompi
+   * IMPORTANTE: Esta ruta debe ir ANTES de pagos/:id/estado para evitar conflictos
    */
   @Get('pagos/verificar/:transactionId')
   @HttpCode(HttpStatus.OK)
