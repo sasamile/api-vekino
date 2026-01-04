@@ -378,7 +378,7 @@ export class FinanzasRepository {
   }
 
   /**
-   * Busca un pago por ID de transacción de Wompi
+   * Busca un pago por ID de transacción de Wompi con relaciones
    */
   async findPagoByWompiTransactionId(prisma: PrismaClient, wompiTransactionId: string) {
     const pagos = await prisma.$queryRaw<any[]>`
@@ -396,8 +396,24 @@ export class FinanzasRepository {
         p."fechaPago"::text as "fechaPago",
         p.observaciones,
         p."createdAt"::text as "createdAt",
-        p."updatedAt"::text as "updatedAt"
+        p."updatedAt"::text as "updatedAt",
+        json_build_object(
+          'id', f.id,
+          'numeroFactura', f."numeroFactura",
+          'valor', f.valor,
+          'estado', f.estado
+        ) as "factura",
+        CASE 
+          WHEN u.id IS NOT NULL THEN json_build_object(
+            'id', u.id,
+            'name', u.name,
+            'email', u.email
+          )
+          ELSE NULL
+        END as "user"
       FROM "pago" p
+      INNER JOIN "factura" f ON p."facturaId" = f.id
+      LEFT JOIN "user" u ON p."userId" = u.id
       WHERE p."wompiTransactionId" = ${wompiTransactionId}
       LIMIT 1
     `;

@@ -727,18 +727,114 @@ export class FinanzasService {
       return pago;
     }
 
-    // Consultar estado en Wompi
+    // Consultar estado en Wompi y actualizar
+    return this.verificarYActualizarEstadoPago(condominioPrisma, pago);
+  }
+
+  /**
+   * Verifica y actualiza el estado de un pago usando el transaction ID de Wompi
+   */
+  async verificarPagoPorTransactionId(
+    condominioId: string,
+    wompiTransactionId: string,
+  ) {
+    await this.ensureFinanzasTables(condominioId);
+    await this.condominiosService.findOne(condominioId);
+    const condominioPrisma =
+      await this.condominiosService.getPrismaClientForCondominio(condominioId);
+
+    // Primero intentar buscar el pago por transaction ID
+    let pago = await this.finanzasRepository.findPagoByWompiTransactionId(
+      condominioPrisma,
+      wompiTransactionId,
+    );
+
+    // Si no se encuentra por transaction ID, buscar pagos en estado PROCESANDO o PENDIENTE
+    // y verificar si alguno corresponde a esta transacción
+    if (!pago) {
+      const pagosPendientes = await condominioPrisma.$queryRaw<any[]>`
+        SELECT 
+          p.id,
+          p."facturaId",
+          p."userId",
+          p.valor,
+          p."metodoPago",
+          p.estado,
+          p."wompiTransactionId",
+          p."wompiReference",
+          p."wompiPaymentLink",
+          p."wompiResponse",
+          p."fechaPago"::text as "fechaPago",
+          p.observaciones,
+          p."createdAt"::text as "createdAt",
+          p."updatedAt"::text as "updatedAt"
+        FROM "pago" p
+        WHERE p.estado IN ('PENDIENTE'::"EstadoPago", 'PROCESANDO'::"EstadoPago")
+          AND (p."wompiTransactionId" IS NULL OR p."wompiTransactionId" = '')
+        ORDER BY p."createdAt" DESC
+        LIMIT 10
+      `;
+
+      // Consultar el estado de la transacción en Wompi para obtener la referencia
+      try {
+        const wompiStatus = await this.wompiService.getTransactionStatus(wompiTransactionId);
+        const reference = wompiStatus.data.reference;
+
+        if (reference) {
+          // Buscar por referencia
+          pago = await this.finanzasRepository.findPagoByWompiReference(
+            condominioPrisma,
+            reference,
+          );
+        }
+      } catch (error) {
+        console.error('Error al consultar transacción en Wompi:', error);
+      }
+    }
+
+    if (!pago) {
+      throw new NotFoundException(
+        `No se pudo encontrar información sobre este pago. Por favor verifica en tu historial de pagos.`,
+      );
+    }
+
+    // Si el pago no tiene transaction ID guardado, actualizarlo primero
+    if (!pago.wompiTransactionId) {
+      await this.finanzasRepository.updatePago(condominioPrisma, pago.id, {
+        wompiTransactionId: wompiTransactionId,
+      });
+      // Obtener el pago actualizado
+      pago = await this.finanzasRepository.findPagoById(condominioPrisma, pago.id);
+    }
+
+    // Consultar estado en Wompi y actualizar
+    return this.verificarYActualizarEstadoPago(condominioPrisma, pago);
+  }
+
+  /**
+   * Verifica el estado del pago en Wompi y actualiza la base de datos
+   */
+  private async verificarYActualizarEstadoPago(condominioPrisma: any, pago: any) {
+    if (!pago.wompiTransactionId) {
+      return pago;
+    }
+
     try {
+      // Consultar estado en Wompi
       const wompiStatus = await this.wompiService.getTransactionStatus(pago.wompiTransactionId);
 
-      // Actualizar el estado del pago si cambió
+      // Actualizar el estado del pago según el estado de Wompi
       let estadoPago = pago.estado;
+      let actualizado = false;
+
       if (wompiStatus.data.status === 'APPROVED' && pago.estado !== 'APROBADO') {
         estadoPago = 'APROBADO';
-        await this.finanzasRepository.updatePago(condominioPrisma, pagoId, {
+        actualizado = true;
+        await this.finanzasRepository.updatePago(condominioPrisma, pago.id, {
           estado: estadoPago,
           fechaPago: new Date(),
           wompiResponse: JSON.stringify(wompiStatus),
+          wompiTransactionId: pago.wompiTransactionId,
         });
 
         // Actualizar la factura como pagada
@@ -751,20 +847,39 @@ export class FinanzasService {
         pago.estado !== 'RECHAZADO'
       ) {
         estadoPago = 'RECHAZADO';
-        await this.finanzasRepository.updatePago(condominioPrisma, pagoId, {
+        actualizado = true;
+        await this.finanzasRepository.updatePago(condominioPrisma, pago.id, {
+          estado: estadoPago,
+          wompiResponse: JSON.stringify(wompiStatus),
+        });
+      } else if (wompiStatus.data.status === 'PENDING' && pago.estado !== 'PROCESANDO') {
+        estadoPago = 'PROCESANDO';
+        actualizado = true;
+        await this.finanzasRepository.updatePago(condominioPrisma, pago.id, {
           estado: estadoPago,
           wompiResponse: JSON.stringify(wompiStatus),
         });
       }
 
+      // Obtener el pago actualizado
+      const pagoActualizado = await this.finanzasRepository.findPagoById(
+        condominioPrisma,
+        pago.id,
+      );
+
       return {
-        ...pago,
+        ...pagoActualizado,
         estado: estadoPago,
         wompiStatus: wompiStatus.data,
+        actualizado,
       };
     } catch (error: any) {
+      console.error('Error al verificar estado del pago en Wompi:', error);
       // Si falla la consulta, retornar el pago con su estado actual
-      return pago;
+      return {
+        ...pago,
+        error: error.message || 'Error al consultar estado en Wompi',
+      };
     }
   }
 }

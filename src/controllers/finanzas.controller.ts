@@ -361,7 +361,7 @@ export class FinanzasController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Consultar estado de pago',
-    description: 'Consulta el estado de un pago, incluyendo el estado en Wompi si aplica.',
+    description: 'Consulta el estado de un pago, incluyendo el estado en Wompi si aplica. Actualiza automáticamente el estado si cambió en Wompi.',
   })
   @ApiParam({
     name: 'id',
@@ -372,7 +372,7 @@ export class FinanzasController {
   @ApiCookieAuth('better-auth.session_token')
   @ApiResponse({
     status: 200,
-    description: 'Estado del pago',
+    description: 'Estado del pago actualizado',
     type: PagoResponseDto,
   })
   @ApiResponse({ status: 404, description: 'Pago no encontrado' })
@@ -382,6 +382,52 @@ export class FinanzasController {
   ) {
     const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
     return this.finanzasService.consultarEstadoPago(condominioId, id);
+  }
+
+  /**
+   * Verificar estado de pago por transaction ID de Wompi
+   */
+  @Get('pagos/verificar/:transactionId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verificar pago por transaction ID de Wompi',
+    description: 'Verifica y actualiza el estado de un pago usando el transaction ID de Wompi. Útil cuando el webhook no se recibió o el pago quedó en estado PROCESANDO.',
+  })
+  @ApiParam({
+    name: 'transactionId',
+    description: 'Transaction ID de Wompi (ej: 11827294-1767494000-43794)',
+    example: '11827294-1767494000-43794',
+  })
+  @ApiBearerAuth('JWT-auth')
+  @ApiCookieAuth('better-auth.session_token')
+  @ApiResponse({
+    status: 200,
+    description: 'Estado del pago verificado y actualizado',
+    schema: {
+      example: {
+        id: '...',
+        facturaId: '...',
+        estado: 'APROBADO',
+        wompiTransactionId: '11827294-1767494000-43794',
+        wompiStatus: {
+          id: '11827294-1767494000-43794',
+          status: 'APPROVED',
+          amount_in_cents: 14000000,
+        },
+        actualizado: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No se pudo encontrar información sobre este pago',
+  })
+  async verificarPagoPorTransactionId(
+    @Subdomain() subdomain: string | null,
+    @Param('transactionId') transactionId: string,
+  ) {
+    const condominioId = await this.getCondominioIdFromSubdomain(subdomain);
+    return this.finanzasService.verificarPagoPorTransactionId(condominioId, transactionId);
   }
 
   /**
